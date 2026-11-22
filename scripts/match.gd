@@ -1,6 +1,9 @@
 extends RefCounted
 
+signal strike_resolved(hit: Dictionary)
+
 const DATA = preload("res://scripts/roster.gd")
+const EXCHANGE = preload("res://scripts/exchange.gd")
 const ROUND_SECONDS := 45.0
 const ROUND_COUNT := 3
 
@@ -18,18 +21,21 @@ var plan: String
 var phase := "fight"
 var round_number := 1
 var time_left := ROUND_SECONDS
-var exchange_delay := 0.7
-var exchange_interval := 1.3
+var exchange_delay := 0.8
 var exchange_serial := 0
-var momentum := 0.0
-var animation := "idle"
-var punch_side := 0
+var current: RefCounted
+var footage: RefCounted
+var playhead := 0.0
+var replay_position := 0.0
+var impact: Dictionary = {}
+var impact_age := 1.0
+var resolved := 0
+var motion_center := 0.0
 var action_left := 0
 var reads_left := 2
 var timeout_left := true
 var timeout_pending := false
 var read_window := 0.0
-var read_preview := 0.0
 var clue_saved := false
 var street_clue := ""
 var adjustment := ""
@@ -38,7 +44,7 @@ var trust_delta := 0.0
 var round_hits := Vector2i.ZERO
 var score := Vector2i.ZERO
 var scorecard: Array[Vector2i] = []
-var line := "O gongo toca. Observe como os dois disputam o espaço."
+var line := "Seu atleta está à esquerda. Observe o adversário à direita."
 var result: Dictionary = {}
 
 func setup(career: RefCounted) -> void:
@@ -72,11 +78,11 @@ func setup(career: RefCounted) -> void:
 	var reading: String = away["pattern"]
 	match reading:
 		"retreat":
-			street_clue = "Repare nos dois passos para trás depois que o rival avança e erra."
+			street_clue = "Depois de errar, o rival dá dois passos para trás e entrega o centro."
 		"exhaust":
-			street_clue = "As investidas são fortes, mas o rival demora a recuperar a guarda depois delas."
+			street_clue = "Depois de dois golpes seguidos, o rival fica parado com as luvas baixas."
 		"chase":
-			street_clue = "Quando encontra distância, o rival espera que alguém vá atrás. Veja o que faz quando precisa tomar a iniciativa."
+			street_clue = "O rival abre espaço de propósito. Se alguém vai atrás dele, ele responde no avanço. Se ninguém persegue, ele precisa sair primeiro."
 
 func can_read() -> bool:
 	return phase == "fight" and read_window > 0.0 and reads_left > 0 and not timeout_pending
@@ -91,35 +97,54 @@ func request_time() -> void:
 	line = "Tempo pedido. O árbitro vai esperar os boxeadores se separarem."
 
 func read_fight() -> void:
-	if not can_read():
+	if not can_read() or footage == null:
 		return
 	reads_left -= 1
 	read_window = 0.0
-	read_preview = 1.35
+	replay()
+
+func replay() -> void:
+	if footage == null:
+		return
+	replay_position = 0.0
 	phase = "slow"
-	animation = str(away["pattern"])
-	line = "Observe como %s reage após a troca." % away["name"]
+	line = "A mesma troca, em câmera lenta. O rival está à direita."
 
 func step(delta: float) -> void:
 	if phase == "slow":
-		read_preview -= delta
-		if read_preview <= 0.0:
+		replay_position = minf(1.0, replay_position + delta / EXCHANGE.REPLAY_SECONDS)
+		if replay_position >= 1.0:
 			phase = "read"
 		return
 	if phase != "fight":
 		return
+	impact_age += delta
 	time_left = maxf(0.0, time_left - delta)
 	read_window = maxf(0.0, read_window - delta)
 	if time_left <= 0.0:
 		end_round()
 		return
-	exchange_delay -= delta
-	if exchange_delay > 0.0:
+	if current != null:
+		playhead = minf(1.0, playhead + delta / current.length)
+		while resolved < current.strikes.size() and playhead >= float(current.strikes[resolved]["contact"]):
+			resolve_strike(current.strikes[resolved])
+			resolved += 1
+		if playhead < 1.0:
+			return
+		if not current.pattern.is_empty():
+			footage = current
+			read_window = 8.0
+		current = null
+		exchange_delay = 0.21
+		if timeout_pending:
+			interrupt()
 		return
 	if timeout_pending:
 		interrupt()
 		return
-	exchange()
+	exchange_delay -= delta
+	if exchange_delay <= 0.0 and time_left > 0.9:
+		exchange()
 
 func interrupt() -> void:
 	timeout_pending = false
@@ -130,65 +155,93 @@ func interrupt() -> void:
 	rival_stamina = minf(100.0, rival_stamina + 8.0)
 	line = "O árbitro concedeu o tempo. Os dois atletas recuperaram um pouco de fôlego."
 
-func exchange() -> void:
-	exchange_serial += 1
-	exchange_interval = rng.randf_range(0.93, 1.48)
-	exchange_delay = exchange_interval
-	var rival_pattern: String = away["pattern"]
-	var matched: bool = plan == DATA.ANSWERS[rival_pattern]
+func round_chance() -> Vector2:
+	var matched: bool = plan == DATA.ANSWERS[away["pattern"]]
 	var using_training := training == plan
 	var coached := adjustment_exchanges > 0 and adjustment == plan
-	var base := 0.26 + (stamina - rival_stamina) * 0.004
+	var base := 0.28 + (stamina - rival_stamina) * 0.004
 	base += (focus - float(away["focus"])) * 0.002
 	base += (trust - 55.0) * 0.001
 	base -= stress * 0.0013
-	base += 0.08 if matched else 0.0
+	base += 0.10 if matched else 0.0
 	base += 0.04 + minf(level * 0.012, 0.06) if using_training else 0.0
 	base += 0.13 if coached and matched else 0.035 if coached else 0.0
-	var player_chance := clampf(base, 0.08, 0.66)
-	var rival_chance := clampf(0.28 + (rival_stamina - stamina) * 0.003 + stress * 0.001 + round_number * 0.012, 0.13, 0.57)
+	var rival := 0.29 + (rival_stamina - stamina) * 0.003 + stress * 0.001 + round_number * 0.012
+	return Vector2(clampf(base, 0.09, 0.67), clampf(rival, 0.13, 0.58))
+
+func exchange() -> void:
+	exchange_serial += 1
+	var chances := round_chance()
 	var roll := rng.randf()
-	punch_side = exchange_serial % 2
-	if roll < player_chance:
-		animation = "home"
-		round_hits.x += 1
-		momentum = lerpf(momentum, 1.0, 0.34)
-		stress = maxf(0.0, stress - 1.7)
-		if exchange_serial % 4 == 0:
-			line = "%s encaixou uma boa troca." % home["name"]
-	elif roll > 1.0 - rival_chance:
-		animation = "away"
-		round_hits.y += 1
-		momentum = lerpf(momentum, -1.0, 0.34)
-		stress = minf(100.0, stress + 4.6)
-		focus = maxf(0.0, focus - 1.8)
-		if exchange_serial % 4 == 0:
-			line = "%s impôs o ritmo nesta troca." % away["name"]
-	else:
-		animation = "guard"
-		momentum = lerpf(momentum, 0.0, 0.24)
-		stress = maxf(0.0, stress - 0.3)
-	if exchange_serial % 7 == 4:
-		animation = rival_pattern
-		read_window = 4.0
-		match rival_pattern:
-			"retreat":
-				line = "%s avançou e recuou de novo." % away["name"]
-			"exhaust":
-				line = "%s está demorando mais para recuperar a guarda." % away["name"]
-			"chase":
-				line = "%s parou e está esperando seu atleta ir atrás." % away["name"]
+	var hit_home := roll < chances.x
+	var hit_away := not hit_home and roll > 1.0 - chances.y
+	var center_shift := 0.13 if plan == "center" else -0.04
+	motion_center = clampf(motion_center * 0.72 + center_shift + rng.randf_range(-0.20, 0.20), -0.8, 0.85)
+	var motif: String = away["pattern"] if exchange_serial % 6 == 3 else ""
+	var hits: Array[Dictionary] = []
+	var duration := rng.randf_range(1.34, 1.68)
+	var spaced := plan == "distance"
+	match motif:
+		"retreat":
+			hits.append(EXCHANGE.strike(1, "cross", "miss", 0.06, 0.54))
+			duration = 2.05
+		"exhaust":
+			hits.append(EXCHANGE.strike(1, "jab", "block", 0.03, 0.35))
+			hits.append(EXCHANGE.strike(1, "hook", "land" if hit_away else "block", 0.34, 0.65))
+			duration = 2.15
+		"chase":
+			if not spaced:
+				hits.append(EXCHANGE.strike(0, "cross", "miss", 0.13, 0.50))
+			hits.append(EXCHANGE.strike(1, "jab", "land" if hit_away and not spaced else "block", 0.51, 0.89))
+			duration = 2.10
+		_:
+			var first := 0 if hit_home else 1 if hit_away else rng.randi_range(0, 1)
+			var style: String = ["jab", "cross", "hook"][exchange_serial % 3]
+			var outcome := "land" if hit_home or hit_away else "block"
+			hits.append(EXCHANGE.strike(first, style, outcome, 0.07, 0.64 if exchange_serial % 3 == 0 else 0.91))
+			if exchange_serial % 3 == 0:
+				hits.append(EXCHANGE.strike(1 - first, "jab", "block", 0.59, 0.95))
+				duration = 1.85
+	current = EXCHANGE.new(exchange_serial, motif, hits, duration, motion_center, spaced)
+	playhead = 0.0
+	resolved = 0
 	var spend := 0.60 + float(home["pace"]) * 1.15
 	if plan == "pace":
 		spend *= 0.68
 	elif plan == "center":
 		spend *= 1.21
-	stamina = clampf(stamina - spend * 0.78 + (0.55 if animation == "guard" else 0.0), 4.0, 100.0)
-	var rival_spend := 0.64 + float(away["pace"]) * 1.12
-	if rival_pattern == "exhaust":
-		rival_spend += 0.52
-	rival_stamina = clampf(rival_stamina - rival_spend * 0.78 + (0.55 if animation == "guard" else 0.0), 4.0, 100.0)
+	stamina = clampf(stamina - spend, 4.0, 100.0)
+	var rival_spend := 0.68 + float(away["pace"]) * 1.25
+	if away["pattern"] == "exhaust":
+		rival_spend += 0.58
+	rival_stamina = clampf(rival_stamina - rival_spend, 4.0, 100.0)
 	adjustment_exchanges = maxi(0, adjustment_exchanges - 1)
+
+func resolve_strike(hit: Dictionary) -> void:
+	impact = hit
+	impact_age = 0.0
+	strike_resolved.emit(hit)
+	var actor: Dictionary = home if hit["actor"] == 0 else away
+	var other: Dictionary = away if hit["actor"] == 0 else home
+	match hit["outcome"]:
+		"land":
+			line = "%s acertou em cheio." % actor["name"]
+			if hit["actor"] == 0:
+				round_hits.x += 1
+				stress = maxf(0.0, stress - 2.3)
+			else:
+				round_hits.y += 1
+				stress = minf(100.0, stress + 5.2)
+				focus = maxf(0.0, focus - 2.0)
+		"block":
+			line = "%s bloqueou." % other["name"]
+		"miss":
+			line = "%s bateu no vazio." % actor["name"]
+
+func review_clue() -> String:
+	if footage != null and footage.pattern == "chase" and footage.spaced:
+		return "Seu atleta manteve a distância. Sem ninguém para atrair, o rival precisou sair primeiro."
+	return street_clue
 
 func read_choice(choice: String) -> void:
 	if phase != "read":
@@ -201,8 +254,6 @@ func read_choice(choice: String) -> void:
 	else:
 		orient(choice, true)
 	phase = "fight"
-	exchange_delay = exchange_interval
-	animation = "idle"
 
 func orient(choice: String, live: bool) -> void:
 	var clarity: float = focus - stress * 0.48 + trust * 0.23
@@ -266,13 +317,14 @@ func resume() -> void:
 		round_number += 1
 		time_left = ROUND_SECONDS
 		round_hits = Vector2i.ZERO
-		momentum = 0.0
+		motion_center = 0.0
 	elif phase != "timeout":
 		return
 	phase = "fight"
 	read_window = 0.0
 	exchange_delay = 1.0
-	animation = "idle"
+	current = null
+	impact.clear()
 
 func end_round() -> void:
 	var points := Vector2i(10, 10)
@@ -283,6 +335,8 @@ func end_round() -> void:
 	scorecard.append(points)
 	score += points
 	timeout_pending = false
+	current = null
+	impact.clear()
 	if round_number >= ROUND_COUNT:
 		finish(false)
 		return

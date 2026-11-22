@@ -5,15 +5,16 @@ const CAREER = preload("res://scripts/career.gd")
 const MATCH = preload("res://scripts/match.gd")
 const ARENA = preload("res://scripts/arena.gd")
 
-const INK := Color("#111827")
-const PANEL := Color("#161f31")
-const PANEL_LIGHT := Color("#202d43")
-const BORDER := Color("#374761")
-const PAPER := Color("#faf2d8")
-const MUTED := Color("#afbed2")
-const GOLD := Color("#ffc462")
-const GREEN := Color("#75dfbc")
-const RED := Color("#ff827e")
+const INK := Color("#16151c")
+const PANEL := Color("#24232c")
+const PANEL_LIGHT := Color("#34313a")
+const BORDER := Color("#514754")
+const PAPER := Color("#fff2d6")
+const MUTED := Color("#d5c7b5")
+const GOLD := Color("#f7c55e")
+const GREEN := Color("#b2dfb6")
+const BLUE := Color("#79d8fa")
+const RED := Color("#ff9479")
 
 var career = CAREER.new()
 var fight: RefCounted
@@ -35,6 +36,14 @@ var stamina_bar: ProgressBar
 var focus_bar: ProgressBar
 var stress_bar: ProgressBar
 var rival_bar: ProgressBar
+var hit_tag: PanelContainer
+var hit_text: Label
+var replay_progress: ProgressBar
+var replay_stages: Array[Label] = []
+var home_count: Label
+var away_count: Label
+var exchange_audio: AudioStreamPlayer
+var exchange_sounds := {}
 var bell: AudioStreamPlayer
 var towel_prompt := false
 
@@ -48,7 +57,7 @@ func _ready() -> void:
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(ui)
 	title_font.font_names = PackedStringArray(["DejaVu Sans", "Arial", "sans-serif"])
-	title_font.font_weight = 800
+	title_font.font_weight = 900
 	var body_font := SystemFont.new()
 	body_font.font_names = PackedStringArray(["DejaVu Sans", "Arial", "sans-serif"])
 	theme.default_font = body_font
@@ -58,17 +67,20 @@ func _ready() -> void:
 		bell = AudioStreamPlayer.new()
 		bell.stream = bell_stream()
 		add_child(bell)
+		exchange_audio = AudioStreamPlayer.new()
+		exchange_audio.volume_db = -11.0
+		add_child(exchange_audio)
+		for outcome in ["land", "block", "miss"]:
+			exchange_sounds[outcome] = exchange_stream(outcome)
 	career.load_progress()
 	show_menu()
 
 func _process(delta: float) -> void:
-	arena.update_pose(delta, fight)
-	if screen != "fight":
-		return
-	if not towel_prompt:
+	if screen == "fight" and not towel_prompt:
 		fight.step(delta)
-	if fight.phase != last_phase:
-		phase_changed()
+		if fight.phase != last_phase:
+			phase_changed()
+	arena.update_pose(delta, fight)
 	if screen == "fight":
 		update_hud()
 
@@ -99,7 +111,36 @@ func bell_stream() -> AudioStreamWAV:
 	stream.data = samples
 	return stream
 
-func sheet(color: Color, edge: Color, radius: int = 12) -> StyleBoxFlat:
+func exchange_stream(outcome: String) -> AudioStreamWAV:
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = 22050
+	var samples := PackedByteArray()
+	var count := 2580 if outcome == "land" else 1810
+	samples.resize(count * 2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 87
+	for i in range(count):
+		var t := float(i) / stream.mix_rate
+		var noise := rng.randf_range(-1.0, 1.0)
+		var sound := 0.0
+		match outcome:
+			"land":
+				sound = (sin(TAU * (138.0 * t - 320.0 * t * t)) * 0.63 + noise * 0.34) * exp(-t * 44.0)
+			"block":
+				sound = (sin(TAU * 263.0 * t) * 0.26 + noise * 0.52) * exp(-t * 70.0)
+			"miss":
+				sound = noise * sin(PI * float(i) / count) * (1.0 - float(i) / count) * 0.21
+		samples.encode_s16(i * 2, int(sound * 17000.0))
+	stream.data = samples
+	return stream
+
+func play_exchange(hit: Dictionary) -> void:
+	if exchange_audio != null:
+		exchange_audio.stream = exchange_sounds[hit["outcome"]]
+		exchange_audio.play()
+
+func sheet(color: Color, edge: Color, radius: int = 4) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.border_color = edge
@@ -159,9 +200,9 @@ func paragraph(parent: Node, words: String, size: int = 16, color: Color = MUTED
 func button(parent: Node, words: String, callback: Callable, accent: bool = false) -> Button:
 	var node := Button.new()
 	node.text = words
-	node.custom_minimum_size.y = 39
+	node.custom_minimum_size.y = 42
 	node.add_theme_font_override("font", title_font)
-	node.add_theme_font_size_override("font_size", 14)
+	node.add_theme_font_size_override("font_size", 16)
 	var normal := GOLD if accent else PANEL_LIGHT
 	var foreground := INK if accent else PAPER
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
@@ -184,7 +225,7 @@ func tint(color: Color) -> void:
 	ui.add_child(background)
 
 func side_content(height_top: float = 46.0, width: float = 520.0) -> VBoxContainer:
-	tint(Color(0.025, 0.04, 0.08, 0.26))
+	tint(Color(0.06, 0.04, 0.025, 0.13))
 	var scroll := ScrollContainer.new()
 	scroll.anchor_bottom = 1.0
 	scroll.offset_left = 30.0
@@ -193,7 +234,7 @@ func side_content(height_top: float = 46.0, width: float = 520.0) -> VBoxContain
 	scroll.offset_bottom = -26.0
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	ui.add_child(scroll)
-	var frame := panel(scroll, Color(0.065, 0.094, 0.153, 0.97))
+	var frame := panel(scroll, Color(0.11, 0.09, 0.12, 0.96))
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return box(frame, 12)
 
@@ -201,9 +242,8 @@ func show_menu() -> void:
 	clear_screen("menu")
 	arena.cast(DATA.ATHLETES[0], DATA.RIVALS[0])
 	var content := side_content(112, 475)
-	label(content, "ACADEMIA  /  CARREIRA", 14, GOLD, true)
-	label(content, "ERounds", 70, PAPER, true)
-	label(content, "ENTRE ROUNDS", 22, GOLD, true)
+	label(content, "ERounds", 78, PAPER, true)
+	label(content, "CARREIRA DE TREINADOR", 16, GOLD, true)
 	paragraph(content, "Treine um jovem boxeador e acompanhe sua carreira do lado de fora das cordas.", 19)
 	if career.athlete_index >= 0 or not career.bouts.is_empty():
 		button(content, "Continuar carreira", continue_career, true)
@@ -305,68 +345,77 @@ func start_fight() -> void:
 	clear_screen("fight")
 	fight = MATCH.new()
 	fight.setup(career)
+	fight.strike_resolved.connect(play_exchange)
 	towel_prompt = false
 	var overlay := Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(overlay)
+
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 12)
-	header.anchor_right = 1.0
-	header.offset_left = 22
-	header.offset_right = -22
-	header.offset_top = 18
+	header.add_theme_constant_override("separation", 10)
+	header.anchor_left = 0.5
+	header.anchor_right = 0.5
+	header.offset_left = -517
+	header.offset_right = 517
+	header.offset_top = 16
 	overlay.add_child(header)
-	var home_card := panel(header, Color(0.07, 0.10, 0.16, 0.95))
-	home_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var home_stats := box(home_card, 3)
-	label(home_stats, fight.home["name"].to_upper(), 23, GOLD, true)
-	stamina_bar = bar(home_stats, "Fôlego", GREEN)
-	focus_bar = bar(home_stats, "Foco", GOLD)
-	stress_bar = bar(home_stats, "Estresse", RED)
-	var center := box(panel(header, Color(0.07, 0.10, 0.16, 0.95)), 3)
-	center.custom_minimum_size.x = 164
-	round_label = label(center, "", 13, GOLD, true)
-	clock_label = label(center, "", 38, PAPER, true)
-	score_label = label(center, "", 12, MUTED)
+	var home_stats := fighter_card(header, fight.home["name"], "SEU CÓRNER", BLUE)
+	home_count = home_stats["count"]
+	stamina_bar = bar(home_stats["meters"], "Fôlego", BLUE)
+	var condition := row(home_stats["meters"], 12)
+	focus_bar = bar(condition, "Foco", GREEN)
+	stress_bar = bar(condition, "Estresse", RED)
+	var center := box(panel(header, INK), 0)
+	center.custom_minimum_size.x = 150
+	round_label = label(center, "", 14, GOLD, true)
+	clock_label = label(center, "", 36, PAPER, true)
+	score_label = label(center, "", 13, MUTED)
 	for text_node in [round_label, clock_label, score_label]:
 		text_node.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var away_card := panel(header, Color(0.07, 0.10, 0.16, 0.95))
-	away_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var away_stats := box(away_card, 3)
-	label(away_stats, fight.away["name"].to_upper(), 23, RED, true)
-	rival_bar = bar(away_stats, "Fôlego", GREEN)
-	label(away_stats, fight.away["style"], 13, MUTED)
+	var away_stats := fighter_card(header, fight.away["name"], "ADVERSÁRIO", RED)
+	away_count = away_stats["count"]
+	rival_bar = bar(away_stats["meters"], "Fôlego", RED)
+	label(away_stats["meters"], fight.away["style"], 14, MUTED)
+
+	hit_tag = panel(overlay, INK)
+	hit_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hit_text = label(hit_tag, "", 17, PAPER, true)
+	hit_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hit_tag.hide()
+
 	hud = VBoxContainer.new()
 	hud.anchor_top = 1.0
 	hud.anchor_bottom = 1.0
-	hud.anchor_right = 1.0
-	hud.offset_left = 22
-	hud.offset_right = -22
-	hud.offset_bottom = -18
-	hud.offset_top = -114
+	hud.anchor_left = 0.5
+	hud.anchor_right = 0.5
+	hud.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	hud.offset_left = -517
+	hud.offset_right = 517
+	hud.offset_top = -17
+	hud.offset_bottom = -17
 	overlay.add_child(hud)
-	var calls := box(panel(hud, Color(0.065, 0.094, 0.153, 0.98)), 6)
-	feed_label = paragraph(calls, "", 16, PAPER)
-	var tools := row(calls)
-	read_button = button(tools, "Analisar [Espaço]", fight.read_fight, true)
-	time_button = button(tools, "Pedir tempo [T]", fight.request_time)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tools.add_child(spacer)
-	button(tools, "Jogar a toalha", open_towel_prompt)
+	var calls := row(panel(hud, INK), 12)
+	feed_label = paragraph(calls, "", 17, PAPER)
+	feed_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	feed_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	read_button = button(calls, "Analisar", fight.read_fight, true)
+	read_button.custom_minimum_size.x = 160
+	time_button = button(calls, "Pedir tempo", fight.request_time)
+	button(calls, "Toalha", open_towel_prompt)
+
 	var interaction_frame := PanelContainer.new()
-	interaction_frame.add_theme_stylebox_override("panel", sheet(Color(0.065, 0.094, 0.153, 0.98), BORDER))
+	interaction_frame.add_theme_stylebox_override("panel", sheet(INK, BORDER))
 	interaction_frame.anchor_top = 1.0
 	interaction_frame.anchor_bottom = 1.0
 	interaction_frame.anchor_left = 0.5
 	interaction_frame.anchor_right = 0.5
 	interaction_frame.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	interaction_frame.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	interaction_frame.offset_left = -410
-	interaction_frame.offset_right = 410
-	interaction_frame.offset_top = -124
-	interaction_frame.offset_bottom = -124
+	interaction_frame.offset_left = -450
+	interaction_frame.offset_right = 450
+	interaction_frame.offset_top = -17
+	interaction_frame.offset_bottom = -17
 	overlay.add_child(interaction_frame)
 	interaction = box(interaction_frame, 7)
 	last_phase = "fight"
@@ -374,24 +423,42 @@ func start_fight() -> void:
 	update_hud()
 	play_bell()
 
+func fighter_card(parent: HBoxContainer, fighter: String, description: String, color: Color) -> Dictionary:
+	var frame := panel(parent, INK)
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var card_style := sheet(INK, color)
+	card_style.border_width_top = 3
+	frame.add_theme_stylebox_override("panel", card_style)
+	var stats := box(frame, 3)
+	var title := row(stats)
+	var name_label := label(title, fighter.to_upper(), 26, color, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var count := label(title, "", 22, PAPER, true)
+	count.tooltip_text = "Golpes limpos neste round"
+	label(stats, description + "  /  GOLPES LIMPOS", 12, MUTED, true)
+	return {"meters": stats, "count": count}
+
 func bar(parent: Node, words: String, color: Color) -> ProgressBar:
-	var line := row(parent, 8)
-	var title := label(line, words, 12, MUTED)
-	title.custom_minimum_size.x = 59
+	var line := row(parent, 6)
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var title := label(line, words, 13, MUTED)
+	title.custom_minimum_size.x = 52
+	var meter := progress_meter(line, color)
+	meter.custom_minimum_size.y = 8
+	return meter
+
+func progress_meter(parent: Node, color: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
 	meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	meter.custom_minimum_size = Vector2(70, 13)
+	meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	meter.show_percentage = false
-	var track := sheet(Color("#303d54"), Color.TRANSPARENT, 4)
-	var fill := sheet(color, Color.TRANSPARENT, 4)
-	track.content_margin_top = 0
-	track.content_margin_bottom = 0
-	fill.content_margin_left = 0
-	fill.content_margin_top = 0
-	fill.content_margin_bottom = 0
+	var track := StyleBoxFlat.new()
+	track.bg_color = PANEL_LIGHT
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
 	meter.add_theme_stylebox_override("background", track)
 	meter.add_theme_stylebox_override("fill", fill)
-	line.add_child(meter)
+	parent.add_child(meter)
 	return meter
 
 func update_hud() -> void:
@@ -400,14 +467,58 @@ func update_hud() -> void:
 	stress_bar.value = fight.stress
 	rival_bar.value = fight.rival_stamina
 	var seconds := ceili(fight.time_left)
-	clock_label.text = "%d:%02d" % [seconds / 60, seconds % 60]
+	clock_label.text = "%02d:%02d" % [int(seconds / 60.0), seconds % 60]
 	round_label.text = "ROUND %d / %d" % [fight.round_number, MATCH.ROUND_COUNT]
 	score_label.text = "PLACAR  %d–%d" % [fight.score.x, fight.score.y]
-	feed_label.text = fight.line
-	read_button.disabled = not fight.can_read() or towel_prompt
+	home_count.text = str(fight.round_hits.x)
+	away_count.text = str(fight.round_hits.y)
+	var analysis_ready: bool = fight.can_read() and not towel_prompt
+	feed_label.text = ("Padrão de %s observado. Reveja a troca." % fight.away["name"]) if analysis_ready else fight.line
+	read_button.disabled = not analysis_ready
 	time_button.disabled = not fight.can_request_time() or towel_prompt
-	read_button.text = ("Analisar agora  ·  %d" if fight.can_read() else "Analisar [Espaço]  ·  %d") % fight.reads_left
-	time_button.text = "Tempo solicitado" if fight.timeout_pending else "Pedir tempo [T]" if fight.timeout_left else "Tempo usado"
+	read_button.text = ("▶  Analisar  (%d)" if analysis_ready else "Analisar  (%d)") % fight.reads_left
+	time_button.text = "Tempo solicitado" if fight.timeout_pending else "Pedir tempo" if fight.timeout_left else "Tempo usado"
+	if fight.phase == "slow" and is_instance_valid(replay_progress):
+		replay_progress.value = fight.replay_position * 100.0
+		var stage_index: int = fight.footage.cue(fight.replay_position)
+		for i in range(replay_stages.size()):
+			replay_stages[i].add_theme_color_override("font_color", GOLD if i == stage_index else MUTED)
+	update_impact_tag()
+
+func update_impact_tag() -> void:
+	var hit: Dictionary = {}
+	var strength := 1.0
+	if fight.phase == "fight" and fight.impact_age < 0.72 and not towel_prompt:
+		hit = fight.impact
+		strength = 1.0 - smoothstep(0.43, 0.72, fight.impact_age)
+	elif fight.phase in ["slow", "read"] and not towel_prompt:
+		for strike in fight.footage.strikes:
+			var gap: float = fight.replay_position - strike["contact"]
+			if gap >= 0.0 and gap < 0.14:
+				hit = strike
+				strength = 1.0 - smoothstep(0.11, 0.14, gap)
+	hit_tag.visible = not hit.is_empty()
+	if hit.is_empty():
+		return
+	var attacker: int = hit["actor"]
+	var defender := 1 - attacker
+	var side := attacker if hit["outcome"] in ["land", "miss"] else defender
+	var color := BLUE if side == 0 else RED
+	match hit["outcome"]:
+		"land":
+			hit_text.text = "GOLPE LIMPO"
+		"block":
+			hit_text.text = "BLOQUEOU"
+		"miss":
+			hit_text.text = "NO VAZIO"
+	hit_text.add_theme_color_override("font_color", color)
+	hit_tag.modulate.a = strength
+	var center: Vector2 = arena.screen_anchor(defender)
+	var direction := 1.0 if defender == 1 else -1.0
+	hit_tag.position = Vector2(
+		center.x + direction * 116.0 - hit_tag.size.x * 0.5,
+		maxf(143.0, center.y + 14.0)
+	)
 
 func phase_changed() -> void:
 	var was := last_phase
@@ -424,7 +535,9 @@ func refresh_interaction() -> void:
 	clear_children(interaction)
 	var frame: PanelContainer = interaction.get_parent()
 	frame.visible = fight.phase != "fight" or towel_prompt
-	hud.visible = true
+	hud.visible = not frame.visible
+	replay_progress = null
+	replay_stages.clear()
 	if not frame.visible:
 		return
 	if towel_prompt:
@@ -442,20 +555,37 @@ func refresh_interaction() -> void:
 		return
 	match fight.phase:
 		"slow":
-			label(interaction, "CÂMERA LENTA", 21, GOLD, true)
-			paragraph(interaction, "Observe os passos e a guarda do adversário.")
+			label(interaction, "REPLAY  /  %s À DIREITA" % fight.away["name"].to_upper(), 21, GOLD, true)
+			var stages := row(interaction, 12)
+			for title in fight.footage.stage_names():
+				var stage := label(stages, title, 16, MUTED, true)
+				stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				replay_stages.append(stage)
+			replay_progress = progress_meter(interaction, GOLD)
+			replay_progress.custom_minimum_size.y = 5
 		"read":
-			label(interaction, "O que você viu?", 23, GOLD, true)
-			paragraph(interaction, fight.street_clue, 15)
+			paragraph(interaction, fight.review_clue(), 17, PAPER)
+			var timeline := row(interaction)
+			button(timeline, "Rever em câmera lenta", fight.replay)
+			var scrub := HSlider.new()
+			scrub.tooltip_text = "Arraste para rever qualquer momento da troca"
+			scrub.max_value = 1.0
+			scrub.step = 0.001
+			scrub.value = fight.replay_position
+			scrub.custom_minimum_size = Vector2(120, 25)
+			scrub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			scrub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			scrub.value_changed.connect(func(value: float) -> void: fight.replay_position = value)
+			timeline.add_child(scrub)
 			var plans := row(interaction)
 			for plan_key in DATA.PLANS:
-				button(plans, DATA.PLANS[plan_key], fight.read_choice.bind(plan_key), plan_key == career.trained_plan)
-			var alternatives := row(interaction)
-			button(alternatives, "Guardar para o intervalo", fight.read_choice.bind("save"))
-			button(alternatives, "Esperar outra troca", fight.read_choice.bind("wait"))
+				button(plans, DATA.PLANS[plan_key], fight.read_choice.bind(plan_key))
+			button(plans, "Levar ao córner", fight.read_choice.bind("save"))
+			button(plans, "Voltar à luta", fight.read_choice.bind("wait"))
 		"corner", "timeout":
 			var title := "Intervalo entre rounds" if fight.phase == "corner" else "Tempo de córner"
 			label(interaction, "%s  /  %d ações" % [title, fight.action_left], 23, GOLD, true)
+			paragraph(interaction, fight.line, 15, PAPER)
 			if fight.clue_saved:
 				paragraph(interaction, fight.street_clue, 14)
 			var care := row(interaction)

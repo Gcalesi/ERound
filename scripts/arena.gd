@@ -7,38 +7,42 @@ var elapsed := 0.0
 var mode := "menu"
 var home_key := ""
 var away_key := ""
-var motion := 0.0
+var look_at_point := Vector3(0, 1.0, 0)
+var fight_deck: Node3D
 
 func _ready() -> void:
 	var world := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("#101729")
+	environment.background_color = Color("#171a24")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("#afbdda")
-	environment.ambient_light_energy = 0.58
+	environment.ambient_light_color = Color("#d0d6ed")
+	environment.ambient_light_energy = 0.65
 	world.environment = environment
 	add_child(world)
 	var key := DirectionalLight3D.new()
 	key.rotation_degrees = Vector3(-54.0, -24.0, 0.0)
-	key.light_color = Color("#ffe1ad")
-	key.light_energy = 0.94
-	key.shadow_enabled = true
+	key.light_color = Color("#ffeacb")
+	key.light_energy = 0.86
+	key.shadow_enabled = false
 	add_child(key)
-	light(Vector3(-4, 4, -3), Color("#577fff"), 6.0, 13.0)
-	light(Vector3(4, 3, 4), Color("#ff8b50"), 4.0, 10.0)
+	light(Vector3(-4, 4, -3), Color("#5e89fa"), 2.3, 12.0)
+	light(Vector3(4, 3, 4), Color("#ffad77"), 1.8, 10.0)
 	build_gym()
 	camera = Camera3D.new()
-	camera.fov = 40.0
-	camera.position = Vector3(3.4, 3.0, 8.2)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 3.7
+	camera.position = Vector3(0, 2.45, 6.8)
 	add_child(camera)
-	camera.look_at(Vector3(-1.05, 1.12, 0.0))
+	camera.look_at(look_at_point)
 	camera.current = true
 
 func material(color: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.roughness = 0.93
+	mat.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	mat.roughness = 0.82
 	return mat
 
 func mesh(parent: Node3D, model: PrimitiveMesh, pos: Vector3, color: Color) -> MeshInstance3D:
@@ -92,55 +96,54 @@ func sign_text(words: String, pos: Vector3, size: int, pixel: float, color: Colo
 	return sign
 
 func build_gym() -> void:
-	box(self, Vector3(0, -0.82, -1), Vector3(38, 0.12, 29), Color("#20243b"))
-	box(self, Vector3(0, 3.3, -8.6), Vector3(36, 8, 0.35), Color("#252c43"))
-	box(self, Vector3(0, 0.15, -8.38), Vector3(36, 1.55, 0.12), Color("#552a43"))
-	box(self, Vector3(0, 1.0, -8.36), Vector3(36, 0.11, 0.12), Color("#ad6547"))
+	var cream := Color("#e6d9bb")
+	var deep := Color("#1d2230")
+	var rail := Color("#373d4b")
+	box(self, Vector3(0, -0.82, -1), Vector3(28, 0.12, 23), deep)
+	box(self, Vector3(0, 2.9, -6.8), Vector3(23, 7, 0.3), Color("#292735"))
+	box(self, Vector3(0, 1.0, -6.61), Vector3(23, 1.70, 0.09), Color("#413039"))
 	for i in range(-5, 6):
-		box(self, Vector3(i * 3.0, 3.8, -8.22), Vector3(0.17, 7.5, 0.28), Color("#171d34"))
-	for i in range(-4, 5, 2):
-		box(self, Vector3(i * 3, 4.5, -8.31), Vector3(2.2, 1.16, 0.09), Color("#141b32"))
-		box(self, Vector3(i * 3, 4.5, -8.24), Vector3(1.95, 0.86, 0.08), Color("#5d7191"))
-		box(self, Vector3(i * 3, 4.5, -8.17), Vector3(0.10, 0.82, 0.07), Color("#262f48"))
-	for i in range(-2, 3):
-		box(self, Vector3(i * 3.5, 5.4, -2.4), Vector3(2.5, 0.17, 0.28), Color("#12182b"))
-		box(self, Vector3(i * 3.5, 5.29, -2.4), Vector3(2.12, 0.06, 0.17), Color("#f2bc83"))
-		box(self, Vector3(i * 4.0, 5.83, -2.4), Vector3(0.09, 0.75, 0.09), Color("#182032"))
-	box(self, Vector3(0.0, -0.42, 0.0), Vector3(7.95, 0.62, 7.95), Color("#1a2544"))
-	box(self, Vector3(0.0, -0.16, 0.0), Vector3(7.88, 0.28, 7.88), Color("#323d5f"))
-	box(self, Vector3(0.0, -0.025, 0.0), Vector3(7.65, 0.05, 7.65), Color("#647a9b"))
-	box(self, Vector3(0.0, -0.34, 3.99), Vector3(7.90, 0.07, 0.04), Color("#dd9c58"))
-	var ink := Color("#526888")
-	for edge in [-3.45, 3.45]:
-		box(self, Vector3(edge, 0.002, 0), Vector3(0.032, 0.006, 6.91), ink)
-		box(self, Vector3(0, 0.002, edge), Vector3(6.91, 0.006, 0.032), ink)
-	var floor_mark := sign_text("E R O U N D S", Vector3(0, 0.009, -1.53), 92, 0.008, Color("#98abc3"))
-	floor_mark.rotation_degrees.x = -90.0
-	sign_text("ER  /  ACADEMIA DE BOXE", Vector3(0, 3.17, -8.04), 64, 0.0076, Color("#eac591"))
+		box(self, Vector3(i * 2.2, 2.8, -6.57), Vector3(0.09, 6, 0.08), Color("#4b3940"))
+	for x in [-5.6, 5.6]:
+		box(self, Vector3(x, 2.73, -6.55), Vector3(2.1, 1.4, 0.09), rail)
+		for i in range(3):
+			box(self, Vector3(x - 0.64 + i * 0.65, 2.73, -6.48), Vector3(0.55, 1.14, 0.08), Color("#75645b"))
+	var placard := box(self, Vector3(0, 2.51, -6.54), Vector3(3.8, 0.89, 0.12), Color("#211e2b"))
+	sign_text("ENTRE ROUNDS", placard.position + Vector3(0, 0.03, 0.07), 88, 0.0045, Color("#eac5a0"))
+	box(self, Vector3(0, 2.02, -6.45), Vector3(3.8, 0.028, 0.04), Color("#af6a43"))
+	box(self, Vector3(0, -0.35, 0), Vector3(7.8, 0.65, 7.5), Color("#24364c"))
+	box(self, Vector3(0, -0.028, 0), Vector3(7.65, 0.055, 7.35), Color("#7c9aaf"))
+	box(self, Vector3(0, -0.24, 3.77), Vector3(7.76, 0.085, 0.018), Color("#b99458"))
+	var marking := Color("#90a7b6")
+	for edge in [-3.35, 3.35]:
+		box(self, Vector3(edge, 0.002, 0), Vector3(0.05, 0.005, 6.72), marking)
+		box(self, Vector3(0, 0.002, edge), Vector3(6.72, 0.005, 0.05), marking)
+	for i in range(20):
+		var angle := TAU * float(i) / 20.0
+		var point := Vector3(cos(angle) * 1.32, 0.006, sin(angle) * 1.32)
+		var tick := box(self, point, Vector3(0.17, 0.008, 0.028), marking)
+		tick.rotation.y = -angle - PI * 0.5
+	fight_deck = joint(self, Vector3.ZERO)
 	for x in [-3.7, 3.7]:
-		for z in [-3.7, 3.7]:
-			var accent := Color("#df4c53") if x < 0 else Color("#5b82f3")
-			box(self, Vector3(x, 0.73, z), Vector3(0.16, 1.65, 0.16), Color("#252d44"))
-			box(self, Vector3(x, 0.91, z), Vector3(0.25, 0.97, 0.25), accent)
-			box(self, Vector3(x, 1.46, z), Vector3(0.25, 0.13, 0.25), Color("#e8ded1"))
-	for h in [0.51, 0.86, 1.20]:
-		var rope_color := Color("#eee0c2") if is_equal_approx(h, 0.86) else Color("#b54a5e")
-		box(self, Vector3(0, h, -3.7), Vector3(7.37, 0.055, 0.055), rope_color)
-		box(self, Vector3(-3.7, h, 0), Vector3(0.055, 0.055, 7.37), rope_color)
-		box(self, Vector3(3.7, h, 0), Vector3(0.055, 0.055, 7.37), rope_color)
-		var near_rope := Color("#b87674") if is_equal_approx(h, 0.86) else Color("#783c59")
-		box(self, Vector3(0, h, 3.7), Vector3(7.37, 0.042, 0.042), near_rope)
-	for x in [-2.95, 2.95]:
-		var stool_color := Color("#c8484e") if x < 0 else Color("#4265d0")
-		pole(self, Vector3(x, 0.22, -2.96), 0.43, 0.075, Color("#272e43"))
-		pole(self, Vector3(x, 0.44, -2.96), 0.12, 0.23, stool_color)
-	var palette := [Color("#3c4663"), Color("#4e495d"), Color("#363b54"), Color("#566278")]
-	for i in range(23):
-		var x := (i - 11) * 0.65
-		var z := -5.5 - (i % 3) * 0.68
-		var height := float(i % 5) * 0.11
-		ellipsoid(self, Vector3(x, 0.64 + height, z), Vector3(0.37, 0.42, 0.33), palette[i % 4], 8)
-		ellipsoid(self, Vector3(x, 0.14 + height, z), Vector3(0.59, 0.76, 0.45), palette[(i + 2) % 4], 8)
+		for z in [-3.53, 3.53]:
+			var accent := Color("#3979a4") if x < 0 else Color("#c86046")
+			var poles := self if z < 0.0 else fight_deck
+			box(poles, Vector3(x, 0.72, z), Vector3(0.18, 1.55, 0.18), deep)
+			box(poles, Vector3(x, 0.85, z), Vector3(0.28, 0.89, 0.26), accent)
+			box(poles, Vector3(x, 1.35, z), Vector3(0.30, 0.16, 0.30), cream)
+	for height in [0.51, 0.82, 1.12]:
+		var rope_color := Color("#c2b39b") if is_equal_approx(height, 0.82) else Color("#805853")
+		box(self, Vector3(0, height, -3.53), Vector3(7.36, 0.037, 0.047), rope_color)
+		box(self, Vector3(-3.7, height, 0), Vector3(0.048, 0.048, 7.06), rope_color)
+		box(self, Vector3(3.7, height, 0), Vector3(0.048, 0.048, 7.06), rope_color)
+		box(fight_deck, Vector3(0, height, 3.53), Vector3(7.36, 0.046, 0.045), rope_color.darkened(0.25))
+	for i in range(18):
+		var x := (i - 8.5) * 0.63
+		var z := -4.45 - (i % 2) * 0.45
+		var height := 0.35 + (i % 4) * 0.095
+		var tone := Color("#34343e").lightened((i % 5) * 0.024)
+		ellipsoid(self, Vector3(x, height + 0.40, z), Vector3(0.33, 0.39, 0.32), tone, 8)
+		ellipsoid(self, Vector3(x, height - 0.08, z), Vector3(0.53, 0.64, 0.40), tone.darkened(0.17), 8)
 
 func cast(left: Dictionary, right: Dictionary) -> void:
 	if home_key == left["id"] and away_key == right["id"]:
@@ -148,10 +151,13 @@ func cast(left: Dictionary, right: Dictionary) -> void:
 	if not home.is_empty():
 		home["root"].queue_free()
 		away["root"].queue_free()
+		home["shadow"].queue_free()
+		away["shadow"].queue_free()
 	home_key = left["id"]
 	away_key = right["id"]
-	home = figure(left)
-	away = figure(right)
+	home = figure(left, Color("#2999c9"))
+	away = figure(right, Color("#d35c45"))
+	update_pose(1.0, null)
 
 func joint(parent: Node3D, at: Vector3) -> Node3D:
 	var part := Node3D.new()
@@ -159,125 +165,213 @@ func joint(parent: Node3D, at: Vector3) -> Node3D:
 	parent.add_child(part)
 	return part
 
-func figure(data: Dictionary) -> Dictionary:
+func figure(data: Dictionary, team: Color) -> Dictionary:
+	var shadow := ellipsoid(self, Vector3(0, 0.009, 0), Vector3(0.78, 0.006, 0.51), Color("#455c70"), 16)
 	var root := joint(self, Vector3.ZERO)
 	root.scale = data["shape"]
-	var body := joint(root, Vector3(0, 0.92, 0))
+	var body := joint(root, Vector3(0, 0.91, 0))
 	var skin: Color = data["skin"]
-	var shade := skin.darkened(0.20)
+	var shade := skin.darkened(0.18)
 	var shorts: Color = data["shorts"]
-	var glove: Color = data["gloves"]
 	var hair: Color = data["hair"]
-	ellipsoid(body, Vector3(0, 0.29, 0.0), Vector3(0.67, 0.73, 0.42), skin)
-	ellipsoid(body, Vector3(0, 0.01, 0.0), Vector3(0.49, 0.38, 0.39), shade)
-	box(body, Vector3(0.0, -0.09, 0.012), Vector3(0.52, 0.16, 0.40), shorts)
-	box(body, Vector3(0.0, -0.02, 0.018), Vector3(0.53, 0.085, 0.42), Color("#f5ebcf"))
-	ellipsoid(body, Vector3(0, 0.61, 0.018), Vector3(0.22, 0.23, 0.22), shade)
-	var head := joint(body, Vector3(0, 0.77, 0.043))
-	ellipsoid(head, Vector3(0, 0.0, 0.0), Vector3(0.38, 0.48, 0.37), skin)
-	var features := Color("#282334")
-	for s in [-1, 1]:
-		ellipsoid(head, Vector3(s * 0.166, -0.015, -0.001), Vector3(0.09, 0.115, 0.085), shade)
-		var eye := box(head, Vector3(s * 0.075, 0.012, 0.174), Vector3(0.091, 0.030, 0.027), features)
-		eye.rotation.z = s * 0.16
-		box(head, Vector3(s * 0.073, 0.014, 0.189), Vector3(0.029, 0.011, 0.009), Color("#fbdfbf"))
-	ellipsoid(head, Vector3(0.0, -0.052, 0.178), Vector3(0.076, 0.075, 0.08), skin.lightened(0.08), 8)
-	box(head, Vector3(0.0, -0.11, 0.149), Vector3(0.083, 0.014, 0.025), shade.darkened(0.43))
-	ellipsoid(head, Vector3(0, 0.14, -0.042), Vector3(0.40, 0.28, 0.37), hair, 9)
+	var dark := Color("#202633")
+	var trim := Color("#f0dbc1")
+	var torso := CylinderMesh.new()
+	torso.height = 0.54
+	torso.top_radius = 0.37
+	torso.bottom_radius = 0.23
+	torso.radial_segments = 8
+	mesh(body, torso, Vector3(0, 0.24, 0), team.darkened(0.29) if data["id"] in ["lia", "mara"] else skin).scale.z = 0.67
+	ellipsoid(body, Vector3(0.0, 0.47, 0.012), Vector3(0.77, 0.32, 0.43), skin, 10)
+	ellipsoid(body, Vector3(0.0, 0.22, 0.018), Vector3(0.54, 0.41, 0.40), skin, 10)
+	box(body, Vector3(0.0, -0.034, 0.012), Vector3(0.55, 0.15, 0.39), shorts)
+	box(body, Vector3(0.0, 0.059, 0.015), Vector3(0.56, 0.095, 0.405), trim)
+	box(body, Vector3(0.0, 0.06, 0.226), Vector3(0.16, 0.055, 0.023), team)
 	if data["id"] in ["lia", "mara"]:
-		ellipsoid(head, Vector3(0, 0.24, -0.14), Vector3(0.24, 0.23, 0.25), hair, 9)
-	else:
-		for i in range(4):
-			var lock := ellipsoid(head, Vector3(-0.15 + i * 0.077, 0.16 + (i % 2) * 0.046, 0.102), Vector3(0.14, 0.24, 0.22), hair, 8)
-			lock.rotation.z = -0.45
-	var arms: Array[Node3D] = []
-	var forearms: Array[Node3D] = []
-	var legs: Array[Node3D] = []
+		ellipsoid(body, Vector3(0.0, 0.36, 0.041), Vector3(0.66, 0.34, 0.43), team.darkened(0.3), 10)
+		box(body, Vector3(0.0, 0.23, 0.24), Vector3(0.38, 0.055, 0.022), team.lightened(0.16))
+	ellipsoid(body, Vector3(0, 0.63, 0.035), Vector3(0.25, 0.30, 0.24), shade)
+	var head := joint(body, Vector3(0, 0.80, 0.057))
+	ellipsoid(head, Vector3(0, -0.07, 0.042), Vector3(0.36, 0.36, 0.34), skin, 10)
+	ellipsoid(head, Vector3(0, 0.045, -0.016), Vector3(0.43, 0.46, 0.40), skin, 10)
 	for side in [-1, 1]:
-		var thigh := joint(body, Vector3(side * 0.151, -0.13, 0.01))
-		ellipsoid(thigh, Vector3(0, -0.12, 0), Vector3(0.285, 0.40, 0.35), shorts)
-		ellipsoid(thigh, Vector3(0, -0.43, -0.02), Vector3(0.205, 0.52, 0.23), skin)
-		ellipsoid(thigh, Vector3(0, -0.64, 0.066), Vector3(0.22, 0.29, 0.33), Color("#282e45"))
-		box(thigh, Vector3(0, -0.735, 0.093), Vector3(0.21, 0.055, 0.31), Color("#e5dfd1"))
-		legs.append(thigh)
-		var arm := joint(body, Vector3(side * 0.29, 0.47, 0.0))
-		ellipsoid(arm, Vector3(0, -0.146, 0), Vector3(0.239, 0.42, 0.237), skin)
-		var elbow := joint(arm, Vector3(0, -0.30, 0.025))
-		ellipsoid(elbow, Vector3(0, -0.12, 0.0), Vector3(0.176, 0.35, 0.188), shade)
-		box(elbow, Vector3(0, -0.236, 0), Vector3(0.206, 0.11, 0.215), Color("#efe4d0"))
-		ellipsoid(elbow, Vector3(0, -0.35, 0.0), Vector3(0.29, 0.34, 0.31), glove)
-		ellipsoid(elbow, Vector3(-side * 0.102, -0.316, 0.08), Vector3(0.12, 0.19, 0.14), glove.darkened(0.12))
-		arms.append(arm)
-		forearms.append(elbow)
-	return {"root": root, "body": body, "head": head, "arms": arms, "forearms": forearms, "legs": legs}
+		ellipsoid(head, Vector3(side * 0.195, -0.016, -0.009), Vector3(0.10, 0.14, 0.076), shade, 8)
+		var brow := box(head, Vector3(side * 0.091, 0.043, 0.163), Vector3(0.118, 0.031, 0.044), hair)
+		brow.rotation.z = side * 0.21
+		box(head, Vector3(side * 0.085, 0.011, 0.173), Vector3(0.076, 0.023, 0.023), trim)
+		box(head, Vector3(side * 0.073, 0.011, 0.185), Vector3(0.029, 0.024, 0.008), dark)
+	ellipsoid(head, Vector3(0.0, -0.049, 0.177), Vector3(0.092, 0.088, 0.105), skin.lightened(0.05), 8)
+	box(head, Vector3(0.0, -0.108, 0.185), Vector3(0.097, 0.016, 0.029), dark)
+	ellipsoid(head, Vector3(0, 0.156, -0.043), Vector3(0.43, 0.29, 0.41), hair, 9)
+	match data["id"]:
+		"lia", "mara":
+			ellipsoid(head, Vector3(0, 0.27, -0.15), Vector3(0.21, 0.22, 0.26), hair, 8)
+			box(head, Vector3(0, 0.118, 0.16), Vector3(0.35, 0.041, 0.084), team)
+		"nico", "davi":
+			ellipsoid(head, Vector3(0, 0.205, -0.015), Vector3(0.36, 0.19, 0.35), hair.lightened(0.08), 8)
+			if data["id"] == "nico":
+				box(head, Vector3(0, 0.131, 0.162), Vector3(0.35, 0.043, 0.081), team)
+		_:
+			for i in range(4):
+				var lock := ellipsoid(head, Vector3(-0.14 + i * 0.082, 0.18 + (i % 2) * 0.035, 0.112), Vector3(0.12, 0.20, 0.23), hair, 8)
+				lock.rotation.z = -0.40
+	var arms: Array[Dictionary] = []
+	var legs: Array[Dictionary] = []
+	for side in [-1, 1]:
+		var upper := ellipsoid(body, Vector3.ZERO, Vector3(0.26, 1, 0.26), skin, 9)
+		var fore := ellipsoid(body, Vector3.ZERO, Vector3(0.19, 1, 0.20), shade, 9)
+		var hand := joint(body, Vector3.ZERO)
+		ellipsoid(hand, Vector3(0, 0.01, 0.024), Vector3(0.32, 0.32, 0.38), team, 10)
+		ellipsoid(hand, Vector3(-side * 0.104, -0.06, 0.00), Vector3(0.147, 0.19, 0.21), team.darkened(0.21), 8)
+		box(hand, Vector3(0, -0.076, -0.117), Vector3(0.217, 0.18, 0.125), team.darkened(0.28))
+		box(hand, Vector3(0, -0.056, -0.18), Vector3(0.193, 0.16, 0.055), trim)
+		arms.append({"upper": upper, "fore": fore, "hand": hand})
+		var thigh := ellipsoid(root, Vector3.ZERO, Vector3(0.31, 1, 0.30), shorts, 9)
+		var calf := ellipsoid(root, Vector3.ZERO, Vector3(0.192, 1, 0.213), shade, 9)
+		var boot := joint(root, Vector3.ZERO)
+		ellipsoid(boot, Vector3(0, 0.125, -0.024), Vector3(0.23, 0.25, 0.23), dark, 9)
+		box(boot, Vector3(0, 0.071, 0.068), Vector3(0.23, 0.115, 0.345), dark)
+		box(boot, Vector3(0, 0.021, 0.074), Vector3(0.235, 0.043, 0.35), trim)
+		for i in range(3):
+			box(boot, Vector3(0, 0.137 + i * 0.023, 0.139 - i * 0.032), Vector3(0.128, 0.014, 0.035), team.lightened(0.25))
+		legs.append({"thigh": thigh, "calf": calf, "boot": boot})
+	return {"root": root, "shadow": shadow, "body": body, "head": head, "arms": arms, "legs": legs}
+
+func idle_state() -> Dictionary:
+	return {"move": 0.0, "duck": 0.0, "recoil": 0.0, "drop": 0.0, "guard": 0.0,
+		"strike": 0.0, "arm": 0, "windup": 0.0, "style": "", "outcome": "", "step": 0.0}
 
 func update_pose(delta: float, fight: RefCounted) -> void:
 	if home.is_empty():
 		return
 	var phase: String = fight.phase if fight != null else ""
-	var slow := phase == "slow" or phase == "read"
-	elapsed += delta * (0.23 if slow else 1.0)
-	var viewing_match := mode == "fight"
-	var target := Vector3(1.9, 2.7, 6.8) if viewing_match else Vector3(3.4, 3.0, 8.2)
-	var look := Vector3(0.0, 1.04, 0.0) if viewing_match else Vector3(-1.05, 1.12, 0.0)
-	if slow:
-		target = Vector3(1.48, 2.15, 4.77)
-		look = Vector3(0.18, 1.11, 0.0)
-	camera.position = camera.position.lerp(target, 1.0 - exp(-delta * 3.7))
-	camera.look_at(look)
-	var time_in_exchange := 0.0
-	var event := "idle"
-	var active_side := 0
-	if fight != null:
-		time_in_exchange = clampf(1.0 - fight.exchange_delay / fight.exchange_interval, 0.0, 1.0)
-		event = fight.animation
-		active_side = fight.punch_side
-	motion = lerpf(motion, 1.0 if slow else 0.0, 1.0 - exp(-delta * 4.0))
-	if slow:
-		time_in_exchange = 0.24 + motion * 0.57
-	var envelope := sin(PI * time_in_exchange)
-	var pattern := sin(TAU * time_in_exchange)
-	var retreat := 0.0
-	match event:
-		"retreat":
-			retreat = -0.28 * maxf(0.0, pattern) + 0.52 * maxf(0.0, -pattern)
-		"exhaust":
-			retreat = -0.39 * envelope
-		"chase":
-			retreat = 0.22 * envelope
+	var replay := phase in ["slow", "read"]
 	var corner := phase in ["corner", "timeout"]
-	var spacing := 0.82 + sin(elapsed * 1.18) * 0.10
-	if corner:
-		spacing = 2.72
-	var shift := 0.11 * sin(elapsed * 1.7)
-	var home_dist := -spacing + (0.33 * envelope if event == "home" else 0.0)
-	var away_dist := spacing + retreat - (0.33 * envelope if event == "away" else 0.0)
+	elapsed += delta * (0.17 if replay else 1.0)
+	var viewing_match := mode == "fight"
+	fight_deck.visible = not viewing_match
+	var event: RefCounted
+	var time := 0.0
+	if fight != null:
+		event = fight.footage if replay else fight.current
+		time = fight.replay_position if replay else fight.playhead
+	var left: Dictionary = event.pose_at(time, 0) if event != null else idle_state()
+	var right: Dictionary = event.pose_at(time, 1) if event != null else idle_state()
+	var center: float = event.center if event != null else fight.motion_center if fight != null else 0.0
+	var spacing := 0.76
+	var depth := 0.075
 	if not viewing_match:
-		home_dist += 0.75
-		away_dist += 0.75
-	pose(home, delta, Vector3(home_dist, 0, shift), 1.0, elapsed, active_side if event == "home" else -1, envelope, corner, fight != null and fight.stamina < 29.0)
-	pose(away, delta, Vector3(away_dist, 0, -shift), -1.0, elapsed + 0.55, active_side if event in ["away", "exhaust", "retreat"] else -1, envelope, corner, event == "exhaust" or (fight != null and fight.rival_stamina < 29.0))
-	home["root"].position.z = lerpf(home["root"].position.z, -2.65 if corner else shift, clampf(delta * 4.8, 0.0, 1.0))
-	away["root"].position.z = lerpf(away["root"].position.z, -2.65 if corner else -shift, clampf(delta * 4.8, 0.0, 1.0))
+		center = 1.73
+		spacing = 0.83
+	elif corner:
+		spacing = 2.46
+	var left_pos := Vector3(center - spacing + float(left["move"]), 0, depth)
+	var right_pos := Vector3(center + spacing - float(right["move"]), 0, -depth)
+	if corner:
+		left_pos.z = -0.7
+		right_pos.z = -0.7
+	var alignment := 1.0 - exp(-delta * (24.0 if replay else 27.0))
+	place(home, left, left_pos, 1.0, elapsed, corner, alignment)
+	place(away, right, right_pos, -1.0, elapsed + 0.49, corner, alignment)
+	limbs(home, away, left, elapsed, corner)
+	limbs(away, home, right, elapsed + 0.49, corner)
+	var desired_camera := Vector3(0.0, 2.38, 6.7)
+	var desired_look := Vector3(0.0, 1.10, 0.0)
+	var zoom := 3.68
+	if not viewing_match:
+		desired_camera = Vector3(0, 2.70, 7.5)
+		desired_look = Vector3(-0.35, 1.01, 0)
+		zoom = 4.04
+	elif replay:
+		desired_camera.x = 0.20
+		desired_look.x = center + 0.30
+		zoom = 3.42
+	elif corner:
+		zoom = 4.15
+	var camera_blend := 1.0 - exp(-delta * 6.0)
+	camera.position = camera.position.lerp(desired_camera, camera_blend)
+	look_at_point = look_at_point.lerp(desired_look, camera_blend)
+	camera.size = lerpf(camera.size, zoom, camera_blend)
+	camera.look_at(look_at_point)
 
-func pose(pawn: Dictionary, delta: float, pos: Vector3, direction: float, clock: float, hit_side: int, strength: float, corner: bool, tired: bool) -> void:
+func place(pawn: Dictionary, state: Dictionary, target: Vector3, direction: float, clock: float, corner: bool, blend: float) -> void:
 	var root: Node3D = pawn["root"]
-	root.position.x = lerpf(root.position.x, pos.x, clampf(delta * 12.0, 0.0, 1.0))
-	var yaw := direction * (PI * 0.5 - 0.42)
-	root.rotation.y = lerp_angle(root.rotation.y, yaw if not corner else direction * 0.35, clampf(delta * 7.0, 0.0, 1.0))
+	root.position = root.position.lerp(target, blend)
+	var shadow: Node3D = pawn["shadow"]
+	shadow.position.x = root.position.x
+	shadow.position.z = root.position.z
+	var yaw := direction * 1.26 if mode == "fight" and not corner else direction * 0.62
+	root.rotation.y = lerp_angle(root.rotation.y, yaw, blend)
 	var body: Node3D = pawn["body"]
-	var hit := strength if hit_side >= 0 and not corner else 0.0
-	body.position.y = 0.88 + 0.034 * sin(clock * 9.0) - (0.20 if corner else 0.0)
-	body.rotation.x = -0.04 + hit * 0.14 + (0.20 * strength if tired else 0.0)
-	body.rotation.y = sin(clock * 4.5) * 0.11 + hit * (0.35 if hit_side == 0 else -0.35)
+	var head: Node3D = pawn["head"]
+	var spring := sin(clock * 8.0) * 0.022
+	var twitch := float(state["recoil"])
+	var lower := float(state["duck"])
+	var strike := float(state["strike"])
+	var low_guard := float(state["drop"])
+	var lead := -1.0 if state["arm"] == 0 else 1.0
+	body.position = Vector3(-lower * 0.14, 0.91 + spring - lower * 0.34 - low_guard * 0.14, strike * 0.055 - twitch * 0.14)
+	if corner:
+		body.position.y = 0.82 + spring
+	body.rotation = Vector3(0.10 + lower * 0.25 + low_guard * 0.34 - twitch * 0.47,
+		lead * (strike * 0.42 - float(state["windup"]) * 0.18), lower * 0.17 - twitch * 0.12)
+	head.rotation = Vector3(twitch * -0.28 + low_guard * 0.22, twitch * 0.52, twitch * -0.26)
+
+func stretch(segment: Node3D, a: Vector3, b: Vector3, overlap: float) -> void:
+	segment.position = (a + b) * 0.5
+	var extent := b - a
+	segment.quaternion = Quaternion(Vector3.UP, extent.normalized())
+	segment.scale.y = extent.length() + overlap
+
+func limbs(pawn: Dictionary, target: Dictionary, state: Dictionary, clock: float, corner: bool) -> void:
+	var body: Node3D = pawn["body"]
+	var enemy_head: Node3D = target["head"]
+	var enemy_body: Node3D = target["body"]
 	for i in range(2):
-		var arm: Node3D = pawn["arms"][i]
-		var elbow: Node3D = pawn["forearms"][i]
-		var leg: Node3D = pawn["legs"][i]
-		var strike := hit if hit_side == i else 0.0
 		var side := -1.0 if i == 0 else 1.0
-		arm.rotation.x = -0.48 - strike * 0.91 + (0.28 if corner else 0.0)
-		arm.rotation.z = side * (0.14 + 0.025 * sin(clock * 8.0))
-		elbow.rotation.x = -1.58 + strike * 1.54 + (0.66 if corner else 0.0) + (0.32 * strength if tired else 0.0)
-		leg.rotation.x = side * (0.17 + 0.06 * sin(clock * 6.0 + i)) - (0.30 if corner else 0.0)
-		leg.rotation.z = side * 0.17
+		var arm: Dictionary = pawn["arms"][i]
+		var leg: Dictionary = pawn["legs"][i]
+		var guard: float = state["guard"]
+		var drop: float = state["drop"]
+		var recoil: float = state["recoil"]
+		var shoulder := Vector3(side * 0.30, 0.47, 0.012)
+		var glove := Vector3(side * (0.22 - guard * 0.09 + recoil * 0.14),
+			0.69 + guard * 0.10 - drop * 0.53 - recoil * 0.21, 0.33 + guard * 0.045 - drop * 0.08)
+		var reach: float = state["strike"] if state["arm"] == i else 0.0
+		if reach > 0.0:
+			var contact := body.to_local(enemy_head.global_position)
+			match state["outcome"]:
+				"land":
+					contact += Vector3(0, -0.055, -0.11)
+				"block":
+					contact += Vector3(0, -0.12, -0.28)
+				"miss":
+					contact.y = body.to_local(enemy_body.global_position).y + 1.23
+			if state["style"] == "hook":
+				contact.x += side * (1.0 - reach) * 0.75
+			glove = glove.lerp(shoulder + (contact - shoulder).limit_length(0.97), reach)
+		elif state["arm"] == i:
+			glove.z -= float(state["windup"]) * 0.13
+		if corner:
+			glove = Vector3(side * 0.29, 0.05, 0.10)
+		var elbow := shoulder.lerp(glove, 0.49) + Vector3(side * (0.10 - reach * 0.06), -0.32 * (1.0 - reach * 0.86), -0.016)
+		var hand: Node3D = arm["hand"]
+		hand.position = glove
+		hand.rotation = Vector3(-0.35 + reach * 0.62, -side * (0.21 + reach * 0.25), side * (0.23 - reach * 0.19))
+		stretch(arm["upper"], shoulder, elbow, 0.15)
+		stretch(arm["fore"], elbow, glove, 0.095)
+		var stride: float = state["step"]
+		var stride_amount: float = state["move"]
+		var swing := sin(stride * TAU + i * PI)
+		var boot := Vector3(side * 0.19, maxf(0.0, swing) * minf(absf(stride_amount) * 0.17, 0.09), -side * 0.205 + swing * minf(absf(stride_amount) * 0.24, 0.14))
+		var hip := Vector3(side * 0.164, body.position.y - 0.078, 0)
+		var knee := hip.lerp(boot + Vector3(0, 0.14, 0), 0.49) + Vector3(side * 0.023, 0, 0.09)
+		leg["boot"].position = boot
+		leg["boot"].rotation.y = side * 0.15 + sin(clock * 3.3) * 0.045
+		stretch(leg["thigh"], hip, knee, 0.15)
+		stretch(leg["calf"], knee, boot + Vector3(0, 0.14, 0), 0.11)
+
+func screen_anchor(side: int) -> Vector2:
+	var pawn := home if side == 0 else away
+	var head: Node3D = pawn["head"]
+	return camera.unproject_position(head.global_position)

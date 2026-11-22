@@ -17,7 +17,7 @@ Também é possível iniciar no terminal com `godot --path .`, a partir da pasta
 ## Em jogo
 
 - Escolha o treino, a carga e a rotina de alimentação. Os efeitos aparecem no fôlego, no foco, na técnica ou no vínculo.
-- Nos momentos de leitura, clique em **Analisar** ou pressione **Espaço**. Você pode orientar imediatamente ou levar sua leitura para a próxima conversa.
+- Quando **Analisar** acender, clique no botão ou pressione **Espaço** para rever a troca em câmera lenta. Arraste a linha do tempo para voltar a um movimento. Você pode orientar o atleta ou levar a leitura ao córner.
 - Clique em **Pedir tempo** ou pressione **T** para solicitar a pausa única da liga fictícia. Entre rounds, use até duas ações no córner.
 - Converse com seu atleta depois da luta. O vínculo muda com a luta e com o modo como você conduz a conversa. Um atleta que mudar de academia pode voltar como rival na terceira luta.
 
@@ -29,7 +29,8 @@ A carreira salva ao selecionar um atleta, mudar a preparação ou concluir a con
 | --- | --- |
 | `main.tscn` e `scripts/game.gd` | Cenas da carreira, interface, entradas e som do gongo |
 | `scripts/arena.gd` | Ringue, modelos 3D, luzes, câmera e poses |
-| `scripts/match.gd` | Simulação da luta, leituras, decisões do córner e placar |
+| `scripts/match.gd` | Simulação da luta, decisões do córner e placar |
+| `scripts/exchange.gd` | Sequências de ataque, defesa e movimentação usadas na luta e no replay |
 | `scripts/career.gd` | Progressão, relacionamento, rivalidade e salvamento |
 | `scripts/roster.gd` | Perfis, planos, preparação e adversários |
 
@@ -43,4 +44,4 @@ godot --headless --export-release Web export/web/index.html
 python3 web/prepare-pages.py export/web
 ```
 
-A branch `gh-pages` publica a raiz. Use os arquivos gerados nela e mantenha os avisos de licença do Godot que já acompanham a versão web.
+Publique os arquivos gerados na raiz de `gh-pages`. A publicação de `main` usa o HTML na raiz com `<base href="./play/">` e os arquivos do jogo dentro de `play/`. Mantenha os avisos de licença do Godot que já acompanham a versão web.

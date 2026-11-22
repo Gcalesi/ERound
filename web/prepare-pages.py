@@ -2,6 +2,9 @@
 
 import argparse
 import gzip
+import hashlib
+import json
+import re
 import shutil
 from pathlib import Path
 
@@ -34,6 +37,17 @@ def prepare(export: Path) -> None:
     engine.write_text(source.replace(GODOT_FETCH, PAGES_FETCH), encoding="utf-8")
     page = export / "index.html"
     html = page.read_text(encoding="utf-8")
+    config = re.search(r"const GODOT_CONFIG = (.+);", html)
+    if config is None:
+        raise ValueError("Godot export configuration not found.")
+    settings = json.loads(config[1])
+    pack = export / "index.pck"
+    digest = hashlib.sha256(pack.read_bytes()).hexdigest()[:12]
+    versioned_pack = f"erounds-{digest}.pck"
+    settings["mainPack"] = versioned_pack
+    settings["fileSizes"][versioned_pack] = settings["fileSizes"].pop(pack.name)
+    html = html[:config.start(1)] + json.dumps(settings, separators=(",", ":")) + html[config.end(1):]
+    pack.rename(export / versioned_pack)
     html = html.replace('lang="en"', 'lang="pt-BR"')
     html = html.replace(
         "Your browser does not support JavaScript.",
