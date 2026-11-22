@@ -2,6 +2,10 @@
 
 Jogo 3D de estratégia em que você acompanha uma temporada de boxe como treinador. Os atletas lutam por conta própria. Sua preparação, sua leitura do adversário e seu jeito de conversar mudam a luta e a relação na academia.
 
+## Jogar no navegador
+
+Abra [ERounds no GitHub Pages](https://gcalesi.github.io/ERound/). No celular, gire a tela para a horizontal para ver melhor o ringue e os controles.
+
 ## Abrir no Godot
 
 1. Importe `project.godot` no Godot 4.3 ou mais recente.
@@ -28,3 +32,15 @@ A carreira salva ao selecionar um atleta, mudar a preparação ou concluir a con
 | `scripts/match.gd` | Simulação da luta, leituras, decisões do córner e placar |
 | `scripts/career.gd` | Progressão, relacionamento, rivalidade e salvamento |
 | `scripts/roster.gd` | Perfis, planos, preparação e adversários |
+
+## Atualizar a versão web
+
+Com o Godot 4.7.2 e os templates de exportação dessa versão instalados, gere e prepare os arquivos estáticos.
+
+```sh
+mkdir -p export/web
+godot --headless --export-release Web export/web/index.html
+python3 web/prepare-pages.py export/web
+```
+
+A branch `gh-pages` publica a raiz. Use os arquivos gerados nela e mantenha os avisos de licença do Godot que já acompanham a versão web.
