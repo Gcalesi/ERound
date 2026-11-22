@@ -94,9 +94,9 @@ func pose_at(t: float, side: int) -> Dictionary:
 				"miss":
 					state["duck"] = smooth_span(p, 0.24, 0.50) * (1.0 - smooth_span(p, 0.64, 1.0))
 					state["move"] = -0.20 * reach
+	if instruction == "on_entry" and side == 1:
+		state["move"] += 0.43 * smooth_span(t, 0.02, 0.33) * (1.0 - smooth_span(t, 0.41, 0.57))
 	if pattern == "retreat" and side == 1:
-		if instruction == "on_entry":
-			state["move"] += 0.43 * smooth_span(t, 0.02, 0.37) * (1.0 - smooth_span(t, 0.41, 0.57))
 		var first := smooth_span(t, 0.53, 0.68)
 		var second := smooth_span(t, 0.70, 0.87)
 		state["move"] -= 0.43 * first + 0.48 * second

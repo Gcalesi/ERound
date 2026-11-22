@@ -235,7 +235,7 @@ func exchange() -> void:
 		])
 		duration = 1.98
 		command_exchange = command
-	elif command == "on_entry" and motif == "retreat":
+	elif command == "on_entry" and (motif == "retreat" or (motif.is_empty() and hits[0]["actor"] == 1)):
 		hits.clear()
 		hits.append(EXCHANGE.strike(0, "jab", "land" if rng.randf() < chances.x + 0.26 else "block", 0.21, 0.51))
 		command_exchange = command
@@ -277,6 +277,10 @@ func resolve_strike(hit: Dictionary) -> void:
 			line = "%s bloqueou." % other["name"]
 		"miss":
 			line = "%s bateu no vazio." % actor["name"]
+	if command_exchange == "low_hook" and hit["actor"] == 0:
+		line = "%s aproveitou a guarda baixa com um gancho." % actor["name"] if hit["outcome"] == "land" else "%s viu a guarda baixar, mas o gancho passou no vazio." % actor["name"]
+	elif command_exchange == "rhythm" and hit["start"] > 0.4:
+		line = "%s completou os dois jabs e saiu da troca." % actor["name"]
 
 func review_clue() -> String:
 	if footage != null and footage.pattern == "chase" and footage.spaced:
