@@ -32,6 +32,8 @@ var feed_label: Label
 var score_label: Label
 var read_button: Button
 var time_button: Button
+var live_buttons: Array[Button] = []
+var live_prompt: Label
 var stamina_bar: ProgressBar
 var focus_bar: ProgressBar
 var stress_bar: ProgressBar
@@ -90,6 +92,10 @@ func _input(event: InputEvent) -> void:
 	if event.keycode == KEY_SPACE and fight.can_read():
 		fight.read_fight()
 		get_viewport().set_input_as_handled()
+	elif event.keycode >= KEY_1 and event.keycode <= KEY_4:
+		var action: String = MATCH.LIVE_CALLS.keys()[event.keycode - KEY_1]
+		if fight.call_live(action):
+			get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_T and fight.can_request_time():
 		fight.request_time()
 		get_viewport().set_input_as_handled()
@@ -395,6 +401,16 @@ func start_fight() -> void:
 	hud.offset_top = -17
 	hud.offset_bottom = -17
 	overlay.add_child(hud)
+	live_buttons.clear()
+	var live := row(panel(hud, INK), 9)
+	live_prompt = paragraph(live, "", 17, GOLD)
+	live_prompt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	live_prompt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for action in MATCH.LIVE_CALLS:
+		var control := button(live, MATCH.LIVE_CALLS[action], fight.call_live.bind(action), true)
+		control.custom_minimum_size.x = 118
+		control.tooltip_text = "Atalho %d" % (live_buttons.size() + 1)
+		live_buttons.append(control)
 	var calls := row(panel(hud, INK), 12)
 	feed_label = paragraph(calls, "", 17, PAPER)
 	feed_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -473,7 +489,18 @@ func update_hud() -> void:
 	home_count.text = str(fight.round_hits.x)
 	away_count.text = str(fight.round_hits.y)
 	var analysis_ready: bool = fight.can_read() and not towel_prompt
-	feed_label.text = ("Padrão de %s observado. Reveja a troca." % fight.away["name"]) if analysis_ready else fight.command_status if not fight.command_status.is_empty() else fight.line
+	var opportunity: bool = fight.live_window() and fight.pending_call.is_empty() and not towel_prompt
+	for control in live_buttons:
+		control.disabled = not opportunity
+	if not fight.pending_call.is_empty():
+		live_prompt.text = "Próxima ação: %s" % MATCH.LIVE_CALLS[fight.pending_call]
+	elif not fight.active_call.is_empty():
+		live_prompt.text = "Em ação: %s" % MATCH.LIVE_CALLS[fight.active_call]
+	elif opportunity:
+		live_prompt.text = "Rival se aproxima. Dê a ordem!" if fight.live_pressure() else "Hora de intervir"
+	else:
+		live_prompt.text = "Aguarde a próxima abertura"
+	feed_label.text = fight.line if not fight.active_call.is_empty() else ("Padrão de %s observado. Reveja a troca." % fight.away["name"]) if analysis_ready else fight.command_status if not fight.command_status.is_empty() else fight.line
 	read_button.disabled = not analysis_ready
 	time_button.disabled = not fight.can_request_time() or towel_prompt
 	read_button.text = ("▶  Analisar  (%d)" if analysis_ready else "Analisar  (%d)") % fight.reads_left

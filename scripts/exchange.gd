@@ -109,5 +109,8 @@ func pose_at(t: float, side: int) -> Dictionary:
 		state["move"] += -0.48 * gap if side == 1 else (0.37 * gap if not spaced else -0.13 * gap)
 	if instruction == "rhythm" and t > 0.73:
 		state["move"] -= 0.56 * smooth_span(t, 0.73, 0.97) if side == 0 else 0.0
+	if instruction == "live_guard" and side == 0:
+		var cover := smooth_span(t, 0.05, 0.33) * (1.0 - smooth_span(t, 0.74, 0.98))
+		state["guard"] = maxf(state["guard"], cover)
 	state["move"] += entry_offset[side] * (1.0 - smooth_span(t, 0.0, 0.30))
 	return state

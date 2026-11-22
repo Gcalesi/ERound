@@ -30,6 +30,9 @@ var replay_position := 0.0
 var impact: Dictionary = {}
 var impact_age := 1.0
 var resolved := 0
+const LIVE_CALLS := {"jab": "Jab", "cross": "Direto", "hook": "Gancho", "guard": "Defender"}
+var pending_call := ""
+var active_call := ""
 const COMMANDS := {
 	"low_hook": "Baixou a guarda? Dá um gancho!",
 	"rhythm": "Foca no ritmo: dois jabs e sai!",
@@ -94,6 +97,19 @@ func setup(career: RefCounted) -> void:
 		"chase":
 			street_clue = "O rival abre espaço de propósito. Se alguém vai atrás dele, ele responde no avanço. Se ninguém persegue, ele precisa sair primeiro."
 
+func live_window() -> bool:
+	return phase == "fight" and not timeout_pending and time_left > 3.0 and exchange_serial % 3 == 1 \
+		and (current == null or playhead >= 0.38)
+
+func live_pressure() -> bool:
+	return exchange_serial % 6 == 4
+
+func call_live(action: String) -> bool:
+	if not LIVE_CALLS.has(action) or not live_window() or not pending_call.is_empty():
+		return false
+	pending_call = action
+	return true
+
 func can_read() -> bool:
 	return phase == "fight" and read_window > 0.0 and reads_left > 0 and not timeout_pending
 
@@ -148,7 +164,8 @@ func step(delta: float) -> void:
 		if not command_exchange.is_empty() and command.is_empty():
 			command_status = ""
 		current = null
-		exchange_delay = 0.21
+		active_call = ""
+		exchange_delay = 0.66 if live_window() and pending_call.is_empty() else 0.21
 		if timeout_pending:
 			interrupt()
 		return
@@ -160,6 +177,8 @@ func step(delta: float) -> void:
 		exchange()
 
 func interrupt() -> void:
+	pending_call = ""
+	active_call = ""
 	timeout_pending = false
 	timeout_left = false
 	action_left = 1
@@ -183,6 +202,9 @@ func round_chance() -> Vector2:
 	return Vector2(clampf(base, 0.09, 0.67), clampf(rival, 0.13, 0.58))
 
 func exchange() -> void:
+	var incoming := live_pressure()
+	active_call = pending_call
+	pending_call = ""
 	exchange_serial += 1
 	var chances := round_chance()
 	var roll := rng.randf()
@@ -221,7 +243,12 @@ func exchange() -> void:
 			if exchange_serial % 3 == 0:
 				hits.append(EXCHANGE.strike(1 - first, "jab", "block", 0.59, 0.95))
 				duration = 1.85
-	if command == "low_hook" and opening:
+			elif incoming:
+				hits.assign([EXCHANGE.strike(1, "cross", "land" if roll < chances.y + 0.19 else "block", 0.1, 0.85)])
+	if not active_call.is_empty():
+		hits = live_strikes(chances, incoming)
+		duration = 1.52
+	elif command == "low_hook" and opening:
 		if motif.is_empty():
 			hits.clear()
 		var hook_outcome := "land" if rng.randf() < clampf(chances.x + 0.39, 0.32, 0.91) else "miss"
@@ -242,7 +269,8 @@ func exchange() -> void:
 	if not command_exchange.is_empty():
 		command = ""
 		command_status = "Executando: " + COMMANDS[command_exchange]
-	current = EXCHANGE.new(exchange_serial, motif, hits, duration, start_center, spaced, motion_center, opening, command_exchange, resting_offset)
+	var animation_order := "live_guard" if active_call == "guard" else command_exchange
+	current = EXCHANGE.new(exchange_serial, motif, hits, duration, start_center, spaced, motion_center, opening, animation_order, resting_offset)
 	playhead = 0.0
 	resolved = 0
 	var spend := 0.60 + float(home["pace"]) * 1.15
@@ -250,12 +278,31 @@ func exchange() -> void:
 		spend *= 0.68
 	elif plan == "center":
 		spend *= 1.21
+	if active_call == "hook":
+		spend += 1.9
+	elif active_call == "cross":
+		spend += 1.0
+	elif active_call == "guard":
+		spend *= 0.45
 	stamina = clampf(stamina - spend, 4.0, 100.0)
 	var rival_spend := 0.68 + float(away["pace"]) * 1.25
 	if away["pattern"] == "exhaust":
 		rival_spend += 0.58
 	rival_stamina = clampf(rival_stamina - rival_spend, 4.0, 100.0)
 	adjustment_exchanges = maxi(0, adjustment_exchanges - 1)
+
+func live_strikes(chances: Vector2, incoming: bool) -> Array[Dictionary]:
+	var hits: Array[Dictionary] = []
+	if active_call == "guard":
+		var hold := clampf(0.64 + stamina * 0.003 + focus * 0.002 - stress * 0.004, 0.44, 0.97)
+		hits.append(EXCHANGE.strike(1, "cross" if incoming else "jab",
+			"block" if rng.randf() < hold else "land", 0.18, 0.81))
+		return hits
+	var timing := 0.18 if active_call == "jab" else 0.23
+	var bonus := 0.23 if incoming and active_call == "jab" else 0.07 if incoming else 0.22
+	var outcome := "land" if rng.randf() < clampf(chances.x + bonus, 0.16, 0.87) else "block"
+	hits.append(EXCHANGE.strike(0, active_call, outcome, timing, 0.79))
+	return hits
 
 func resolve_strike(hit: Dictionary) -> void:
 	impact = hit
@@ -277,7 +324,14 @@ func resolve_strike(hit: Dictionary) -> void:
 			line = "%s bloqueou." % other["name"]
 		"miss":
 			line = "%s bateu no vazio." % actor["name"]
-	if command_exchange == "low_hook" and hit["actor"] == 0:
+	if active_call == "guard" and hit["outcome"] == "block":
+		line = "%s fechou a guarda e bloqueou." % home["name"]
+	elif active_call == "guard":
+		line = "A defesa de %s cedeu." % home["name"]
+	elif not active_call.is_empty():
+		var move_name: String = LIVE_CALLS[active_call].to_lower()
+		line = "%s acertou o %s." % [home["name"], move_name] if hit["outcome"] == "land" else "O rival bloqueou o %s de %s." % [move_name, home["name"]]
+	elif command_exchange == "low_hook" and hit["actor"] == 0:
 		line = "%s aproveitou a guarda baixa com um gancho." % actor["name"] if hit["outcome"] == "land" else "%s viu a guarda baixar, mas o gancho passou no vazio." % actor["name"]
 	elif command_exchange == "rhythm" and hit["start"] > 0.4:
 		line = "%s completou os dois jabs e saiu da troca." % actor["name"]
@@ -384,6 +438,8 @@ func end_round() -> void:
 		points.x = 9 if round_hits.y - round_hits.x < 10 else 8
 	scorecard.append(points)
 	score += points
+	pending_call = ""
+	active_call = ""
 	timeout_pending = false
 	current = null
 	impact.clear()
