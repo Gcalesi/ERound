@@ -30,7 +30,17 @@ var replay_position := 0.0
 var impact: Dictionary = {}
 var impact_age := 1.0
 var resolved := 0
-var motion_center := 0.0
+const COMMANDS := {
+	"low_hook": "Baixou a guarda? Dá um gancho!",
+	"rhythm": "Foca no ritmo: dois jabs e sai!",
+	"on_entry": "Ele entrou? Recebe com um jab!",
+}
+const COMMAND_PLANS := {"low_hook": "center", "rhythm": "pace", "on_entry": "distance"}
+var motion_center := Vector2.ZERO
+var resting_offset := Vector2.ZERO
+var command := ""
+var command_status := ""
+var command_exchange := ""
 var action_left := 0
 var reads_left := 2
 var timeout_left := true
@@ -134,6 +144,9 @@ func step(delta: float) -> void:
 		if not current.pattern.is_empty():
 			footage = current
 			read_window = 8.0
+		resting_offset = Vector2(current.pose_at(1.0, 0)["move"], current.pose_at(1.0, 1)["move"])
+		if not command_exchange.is_empty() and command.is_empty():
+			command_status = ""
 		current = null
 		exchange_delay = 0.21
 		if timeout_pending:
@@ -175,12 +188,18 @@ func exchange() -> void:
 	var roll := rng.randf()
 	var hit_home := roll < chances.x
 	var hit_away := not hit_home and roll > 1.0 - chances.y
-	var center_shift := 0.13 if plan == "center" else -0.04
-	motion_center = clampf(motion_center * 0.72 + center_shift + rng.randf_range(-0.20, 0.20), -0.8, 0.85)
+	var start_center := motion_center
+	var route := (exchange_serial - 1) % 12
+	var direction := TAU * float(route) / 12.0
+	var desired := Vector2(sin(direction) * 2.15, sin(direction * 2.0 + 0.35) * 0.94)
+	var pressure := 0.25 if hit_home else -0.25 if hit_away else 0.0
+	motion_center = motion_center.move_toward(desired + Vector2(pressure, 0), 1.16)
 	var motif: String = away["pattern"] if exchange_serial % 6 == 3 else ""
 	var hits: Array[Dictionary] = []
 	var duration := rng.randf_range(1.34, 1.68)
 	var spaced := plan == "distance"
+	var opening := motif == "exhaust" or (motif.is_empty() and exchange_serial % 5 == 0)
+	command_exchange = ""
 	match motif:
 		"retreat":
 			hits.append(EXCHANGE.strike(1, "cross", "miss", 0.06, 0.54))
@@ -202,7 +221,28 @@ func exchange() -> void:
 			if exchange_serial % 3 == 0:
 				hits.append(EXCHANGE.strike(1 - first, "jab", "block", 0.59, 0.95))
 				duration = 1.85
-	current = EXCHANGE.new(exchange_serial, motif, hits, duration, motion_center, spaced)
+	if command == "low_hook" and opening:
+		if motif.is_empty():
+			hits.clear()
+		var hook_outcome := "land" if rng.randf() < clampf(chances.x + 0.39, 0.32, 0.91) else "miss"
+		hits.append(EXCHANGE.strike(0, "hook", hook_outcome, 0.70, 0.97))
+		duration = 2.28
+		command_exchange = command
+	elif command == "rhythm" and motif.is_empty():
+		hits.assign([
+			EXCHANGE.strike(0, "jab", "block", 0.18, 0.43),
+			EXCHANGE.strike(0, "jab", "land" if rng.randf() < chances.x + 0.14 else "block", 0.47, 0.77),
+		])
+		duration = 1.98
+		command_exchange = command
+	elif command == "on_entry" and motif == "retreat":
+		hits.clear()
+		hits.append(EXCHANGE.strike(0, "jab", "land" if rng.randf() < chances.x + 0.26 else "block", 0.21, 0.51))
+		command_exchange = command
+	if not command_exchange.is_empty():
+		command = ""
+		command_status = "Executando: " + COMMANDS[command_exchange]
+	current = EXCHANGE.new(exchange_serial, motif, hits, duration, start_center, spaced, motion_center, opening, command_exchange, resting_offset)
 	playhead = 0.0
 	resolved = 0
 	var spend := 0.60 + float(home["pace"]) * 1.15
@@ -256,20 +296,21 @@ func read_choice(choice: String) -> void:
 	phase = "fight"
 
 func orient(choice: String, live: bool) -> void:
+	var tactic: String = COMMAND_PLANS.get(choice, choice)
 	var clarity: float = focus - stress * 0.48 + trust * 0.23
-	if choice == training:
+	if tactic == training:
 		clarity += 18.0
 	if stamina < 24.0:
 		clarity -= 14.0
 	if live:
 		clarity -= 14.0
-	if clarity < 40.0:
+	if clarity < 40.0 and not COMMANDS.has(choice):
 		line = "%s ouviu a orientação e acabou voltando ao seu plano anterior." % home["name"]
 		trust_delta -= 3.0 if live else 0.0
 		return
-	plan = choice
+	plan = tactic
 	clue_saved = false
-	adjustment = choice
+	adjustment = tactic
 	adjustment_exchanges = 11 if live else 18
 	if plan == DATA.ANSWERS[away["pattern"]]:
 		focus = minf(100.0, focus + 8.0)
@@ -277,6 +318,10 @@ func orient(choice: String, live: bool) -> void:
 		line = "%s entendeu a leitura e mudou de plano." % home["name"]
 	else:
 		line = "%s aceitou o ajuste e vai experimentar a orientação." % home["name"]
+	if COMMANDS.has(choice):
+		command = choice
+		command_status = "Preparando: " + COMMANDS[choice]
+		line = "“%s”" % COMMANDS[choice]
 
 func corner_action(action: String) -> void:
 	if action_left <= 0 or phase not in ["corner", "timeout"]:
@@ -317,7 +362,8 @@ func resume() -> void:
 		round_number += 1
 		time_left = ROUND_SECONDS
 		round_hits = Vector2i.ZERO
-		motion_center = 0.0
+		motion_center = Vector2.ZERO
+		resting_offset = Vector2.ZERO
 	elif phase != "timeout":
 		return
 	phase = "fight"

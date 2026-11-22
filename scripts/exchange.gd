@@ -7,16 +7,29 @@ var strikes: Array[Dictionary]
 var pattern: String
 var length: float
 var number: int
-var center: float
+var center: Vector2
+var destination: Vector2
+var low_guard: bool
+var instruction: String
+var entry_offset: Vector2
 var spaced: bool
 
-func _init(serial: int, motif: String, hits: Array[Dictionary], seconds: float, midpoint: float, keep_distance: bool) -> void:
+func _init(serial: int, motif: String, hits: Array[Dictionary], seconds: float, midpoint: Vector2, keep_distance: bool, end_point: Vector2, opening: bool, order: String, previous_offset: Vector2) -> void:
 	number = serial
 	pattern = motif
 	strikes = hits
 	length = seconds
 	center = midpoint
+	destination = end_point
+	low_guard = opening
+	instruction = order
+	entry_offset = previous_offset
 	spaced = keep_distance
+
+func travel(t: float) -> Vector2:
+	var first := smooth_span(t, 0.02, 0.29)
+	var last := smooth_span(t, 0.71, 1.0)
+	return center.lerp(destination, first * 0.59 + last * 0.41)
 
 static func strike(actor: int, style: String, outcome: String, start: float, end: float) -> Dictionary:
 	return {"actor": actor, "style": style, "outcome": outcome, "start": start, "end": end,
@@ -55,7 +68,7 @@ func pose_at(t: float, side: int) -> Dictionary:
 	var state := {
 		"move": 0.0, "duck": 0.0, "recoil": 0.0, "drop": 0.0,
 		"guard": 0.0, "windup": 0.0, "strike": 0.0, "arm": 0,
-		"style": "jab", "outcome": "", "step": 0.0,
+		"style": "jab", "outcome": "", "step": 0.0, "swing": 0.0,
 	}
 	for hit in strikes:
 		var p := progress(t, hit)
@@ -64,11 +77,12 @@ func pose_at(t: float, side: int) -> Dictionary:
 		var reach := extension(p)
 		if int(hit["actor"]) == side:
 			state["strike"] = reach
+			state["swing"] = smooth_span(p, 0.22, CONTACT)
 			state["windup"] = sin(PI * smooth_span(p, 0.0, 0.27)) if p < 0.27 else 0.0
 			state["arm"] = 0 if hit["style"] == "jab" else 1
 			state["style"] = hit["style"]
 			state["outcome"] = hit["outcome"]
-			state["move"] = 0.30 * smooth_span(p, 0.04, 0.47) * (1.0 - smooth_span(p, 0.63, 1.0))
+			state["move"] = (0.53 if hit["style"] == "hook" else 0.37) * smooth_span(p, 0.04, 0.47) * (1.0 - smooth_span(p, 0.63, 1.0))
 			state["step"] = p
 		else:
 			match hit["outcome"]:
@@ -81,14 +95,19 @@ func pose_at(t: float, side: int) -> Dictionary:
 					state["duck"] = smooth_span(p, 0.24, 0.50) * (1.0 - smooth_span(p, 0.64, 1.0))
 					state["move"] = -0.20 * reach
 	if pattern == "retreat" and side == 1:
+		if instruction == "on_entry":
+			state["move"] += 0.43 * smooth_span(t, 0.02, 0.37) * (1.0 - smooth_span(t, 0.41, 0.57))
 		var first := smooth_span(t, 0.53, 0.68)
 		var second := smooth_span(t, 0.70, 0.87)
 		state["move"] -= 0.43 * first + 0.48 * second
 		if t >= 0.53:
 			state["step"] = 1.0 - first * 0.5 - second * 0.5
-	elif pattern == "exhaust" and side == 1:
+	elif low_guard and side == 1:
 		state["drop"] = smooth_span(t, 0.55, 0.72)
 	elif pattern == "chase":
 		var gap := smooth_span(t, 0.04, 0.31) * (1.0 - smooth_span(t, 0.53, 0.76))
 		state["move"] += -0.48 * gap if side == 1 else (0.37 * gap if not spaced else -0.13 * gap)
+	if instruction == "rhythm" and t > 0.73:
+		state["move"] -= 0.56 * smooth_span(t, 0.73, 0.97) if side == 0 else 0.0
+	state["move"] += entry_offset[side] * (1.0 - smooth_span(t, 0.0, 0.30))
 	return state

@@ -473,7 +473,7 @@ func update_hud() -> void:
 	home_count.text = str(fight.round_hits.x)
 	away_count.text = str(fight.round_hits.y)
 	var analysis_ready: bool = fight.can_read() and not towel_prompt
-	feed_label.text = ("Padrão de %s observado. Reveja a troca." % fight.away["name"]) if analysis_ready else fight.line
+	feed_label.text = ("Padrão de %s observado. Reveja a troca." % fight.away["name"]) if analysis_ready else fight.command_status if not fight.command_status.is_empty() else fight.line
 	read_button.disabled = not analysis_ready
 	time_button.disabled = not fight.can_request_time() or towel_prompt
 	read_button.text = ("▶  Analisar  (%d)" if analysis_ready else "Analisar  (%d)") % fight.reads_left
@@ -578,10 +578,11 @@ func refresh_interaction() -> void:
 			scrub.value_changed.connect(func(value: float) -> void: fight.replay_position = value)
 			timeline.add_child(scrub)
 			var plans := row(interaction)
-			for plan_key in DATA.PLANS:
-				button(plans, DATA.PLANS[plan_key], fight.read_choice.bind(plan_key))
-			button(plans, "Levar ao córner", fight.read_choice.bind("save"))
-			button(plans, "Voltar à luta", fight.read_choice.bind("wait"))
+			for order in MATCH.COMMANDS:
+				button(plans, MATCH.COMMANDS[order], fight.read_choice.bind(order))
+			var decisions := row(interaction)
+			button(decisions, "Levar ao córner", fight.read_choice.bind("save"))
+			button(decisions, "Voltar à luta", fight.read_choice.bind("wait"))
 		"corner", "timeout":
 			var title := "Intervalo entre rounds" if fight.phase == "corner" else "Tempo de córner"
 			label(interaction, "%s  /  %d ações" % [title, fight.action_left], 23, GOLD, true)
@@ -593,8 +594,8 @@ func refresh_interaction() -> void:
 			corner_button(care, "Sentar e respirar", "breathe")
 			corner_button(care, "Perguntar o que viu", "escuta")
 			var plans := row(interaction)
-			for plan_key in DATA.PLANS:
-				corner_button(plans, DATA.PLANS[plan_key], plan_key)
+			for order in MATCH.COMMANDS:
+				corner_button(plans, MATCH.COMMANDS[order], order)
 			var talk := row(interaction)
 			corner_button(talk, "Falar direto", "direto")
 			corner_button(talk, "Lançar um desafio", "desafio")

@@ -239,7 +239,7 @@ func figure(data: Dictionary, team: Color) -> Dictionary:
 
 func idle_state() -> Dictionary:
 	return {"move": 0.0, "duck": 0.0, "recoil": 0.0, "drop": 0.0, "guard": 0.0,
-		"strike": 0.0, "arm": 0, "windup": 0.0, "style": "", "outcome": "", "step": 0.0}
+		"strike": 0.0, "arm": 0, "windup": 0.0, "style": "", "outcome": "", "step": 0.0, "swing": 0.0}
 
 func update_pose(delta: float, fight: RefCounted) -> void:
 	if home.is_empty():
@@ -257,24 +257,30 @@ func update_pose(delta: float, fight: RefCounted) -> void:
 		time = fight.replay_position if replay else fight.playhead
 	var left: Dictionary = event.pose_at(time, 0) if event != null else idle_state()
 	var right: Dictionary = event.pose_at(time, 1) if event != null else idle_state()
-	var center: float = event.center if event != null else fight.motion_center if fight != null else 0.0
-	var spacing := 0.76
-	var depth := 0.075
+	var center: Vector2 = event.travel(time) if event != null else fight.motion_center if fight != null else Vector2.ZERO
+	if event == null and viewing_match and not corner and fight != null:
+		left["move"] = fight.resting_offset.x
+		right["move"] = fight.resting_offset.y
+	var spacing := 0.78
+	var depth := 0.09 + center.x * 0.16
 	if not viewing_match:
-		center = 1.73
+		center = Vector2(1.73, 0.0)
 		spacing = 0.83
 	elif corner:
 		spacing = 2.46
-	var left_pos := Vector3(center - spacing + float(left["move"]), 0, depth)
-	var right_pos := Vector3(center + spacing - float(right["move"]), 0, -depth)
+	var left_pos := Vector3(center.x - spacing + float(left["move"]), 0, center.y + depth)
+	var right_pos := Vector3(center.x + spacing - float(right["move"]), 0, center.y - depth)
 	if corner:
 		left_pos.z = -0.7
 		right_pos.z = -0.7
+	left_pos.x = clampf(left_pos.x, -3.19, 3.19)
+	right_pos.x = clampf(right_pos.x, -3.19, 3.19)
+	var heading := atan2(right_pos.x - left_pos.x, right_pos.z - left_pos.z)
 	var alignment := 1.0 - exp(-delta * (24.0 if replay else 27.0))
-	place(home, left, left_pos, 1.0, elapsed, corner, alignment)
-	place(away, right, right_pos, -1.0, elapsed + 0.49, corner, alignment)
-	limbs(home, away, left, elapsed, corner)
-	limbs(away, home, right, elapsed + 0.49, corner)
+	place(home, left, left_pos, 1.0, elapsed, corner, alignment, heading - 0.28)
+	place(away, right, right_pos, -1.0, elapsed + 0.49, corner, alignment, heading - PI + 0.28)
+	limbs(home, away, left, elapsed, corner, event, time, 0)
+	limbs(away, home, right, elapsed + 0.49, corner, event, time, 1)
 	var desired_camera := Vector3(0.0, 2.38, 6.7)
 	var desired_look := Vector3(0.0, 1.10, 0.0)
 	var zoom := 3.68
@@ -284,23 +290,28 @@ func update_pose(delta: float, fight: RefCounted) -> void:
 		zoom = 4.04
 	elif replay:
 		desired_camera.x = 0.20
-		desired_look.x = center + 0.30
+		desired_look.x = center.x + 0.24
 		zoom = 3.42
 	elif corner:
 		zoom = 4.15
+	else:
+		desired_look.x = center.x * 0.63
 	var camera_blend := 1.0 - exp(-delta * 6.0)
 	camera.position = camera.position.lerp(desired_camera, camera_blend)
 	look_at_point = look_at_point.lerp(desired_look, camera_blend)
 	camera.size = lerpf(camera.size, zoom, camera_blend)
 	camera.look_at(look_at_point)
 
-func place(pawn: Dictionary, state: Dictionary, target: Vector3, direction: float, clock: float, corner: bool, blend: float) -> void:
+func place(pawn: Dictionary, state: Dictionary, target: Vector3, direction: float, clock: float, corner: bool, blend: float, heading: float) -> void:
 	var root: Node3D = pawn["root"]
 	root.position = root.position.lerp(target, blend)
 	var shadow: Node3D = pawn["shadow"]
 	shadow.position.x = root.position.x
 	shadow.position.z = root.position.z
-	var yaw := direction * 1.26 if mode == "fight" and not corner else direction * 0.62
+	var yaw := heading if mode == "fight" and not corner else direction * 0.62
+	var strike_t: float = state["strike"]
+	var twist := 0.24 if state["style"] == "hook" else 0.15 if state["style"] == "cross" else 0.035
+	yaw += (-1.0 if state["arm"] == 1 else 1.0) * strike_t * twist
 	root.rotation.y = lerp_angle(root.rotation.y, yaw, blend)
 	var body: Node3D = pawn["body"]
 	var head: Node3D = pawn["head"]
@@ -314,7 +325,7 @@ func place(pawn: Dictionary, state: Dictionary, target: Vector3, direction: floa
 	if corner:
 		body.position.y = 0.82 + spring
 	body.rotation = Vector3(0.10 + lower * 0.25 + low_guard * 0.34 - twitch * 0.47,
-		lead * (strike * 0.42 - float(state["windup"]) * 0.18), lower * 0.17 - twitch * 0.12)
+		lead * (strike * (-0.88 if state["style"] == "hook" else -0.52 if state["style"] == "cross" else 0.22) - float(state["windup"]) * 0.32), lower * 0.17 - twitch * 0.12)
 	head.rotation = Vector3(twitch * -0.28 + low_guard * 0.22, twitch * 0.52, twitch * -0.26)
 
 func stretch(segment: Node3D, a: Vector3, b: Vector3, overlap: float) -> void:
@@ -323,9 +334,10 @@ func stretch(segment: Node3D, a: Vector3, b: Vector3, overlap: float) -> void:
 	segment.quaternion = Quaternion(Vector3.UP, extent.normalized())
 	segment.scale.y = extent.length() + overlap
 
-func limbs(pawn: Dictionary, target: Dictionary, state: Dictionary, clock: float, corner: bool) -> void:
+func limbs(pawn: Dictionary, target: Dictionary, state: Dictionary, clock: float, corner: bool, event: RefCounted, time: float, fighter: int) -> void:
 	var body: Node3D = pawn["body"]
 	var enemy_head: Node3D = target["head"]
+	var root: Node3D = pawn["root"]
 	var enemy_body: Node3D = target["body"]
 	for i in range(2):
 		var side := -1.0 if i == 0 else 1.0
@@ -348,26 +360,47 @@ func limbs(pawn: Dictionary, target: Dictionary, state: Dictionary, clock: float
 				"miss":
 					contact.y = body.to_local(enemy_body.global_position).y + 1.23
 			if state["style"] == "hook":
-				contact.x += side * (1.0 - reach) * 0.75
-			glove = glove.lerp(shoulder + (contact - shoulder).limit_length(0.97), reach)
+				var chamber := Vector3(side * 0.62, 0.47, 0.16)
+				var sweep := Vector3(side * 0.90, 0.61, 0.52)
+				contact.x -= side * float(state["swing"]) * (1.0 - reach) * 0.25
+				var end := shoulder + (contact - shoulder).limit_length(0.82)
+				var arc: float = state["swing"]
+				glove = glove.lerp(chamber.lerp(sweep, arc).lerp(sweep.lerp(end, arc), arc), reach)
+			else:
+				var reach_limit := 0.97 if state["style"] == "cross" else 0.91
+				glove = glove.lerp(shoulder + (contact - shoulder).limit_length(reach_limit), reach)
 		elif state["arm"] == i:
 			glove.z -= float(state["windup"]) * 0.13
 		if corner:
 			glove = Vector3(side * 0.29, 0.05, 0.10)
 		var elbow := shoulder.lerp(glove, 0.49) + Vector3(side * (0.10 - reach * 0.06), -0.32 * (1.0 - reach * 0.86), -0.016)
+		if state["style"] == "hook" and reach > 0.0:
+			elbow = elbow.lerp(Vector3(side * 0.64, glove.y - 0.04, 0.31), reach)
 		var hand: Node3D = arm["hand"]
 		hand.position = glove
 		hand.rotation = Vector3(-0.35 + reach * 0.62, -side * (0.21 + reach * 0.25), side * (0.23 - reach * 0.19))
 		stretch(arm["upper"], shoulder, elbow, 0.15)
 		stretch(arm["fore"], elbow, glove, 0.095)
-		var stride: float = state["step"]
-		var stride_amount: float = state["move"]
-		var swing := sin(stride * TAU + i * PI)
-		var boot := Vector3(side * 0.19, maxf(0.0, swing) * minf(absf(stride_amount) * 0.17, 0.09), -side * 0.205 + swing * minf(absf(stride_amount) * 0.24, 0.14))
+		var boot := Vector3(side * 0.20, 0.0, -side * 0.27)
+		var rear_pivot := reach if i == 1 and state["style"] in ["hook", "cross"] else 0.0
+		if event != null and not corner:
+			var stepping: float = time * 4.0 + float((i + fighter) % 2) * 0.5
+			var part := fposmod(stepping, 1.0)
+			var touchdown := time - part * 0.25
+			var swing := smoothstep(0.36, 0.90, part)
+			var foot_time := clampf(touchdown + 0.25 * swing, 0.0, 1.0)
+			var trail: Vector2 = event.travel(foot_time) - event.travel(time)
+			var foot_pose: Dictionary = event.pose_at(foot_time, fighter)
+			trail.x += (float(foot_pose["move"]) - float(state["move"])) * (1.0 if fighter == 0 else -1.0)
+			var step_delta := root.basis.inverse() * Vector3(trail.x, 0, trail.y)
+			boot += step_delta.limit_length(0.38)
+			if part >= 0.36 and part <= 0.9:
+				boot.y += 0.105 * sin(PI * (part - 0.36) / 0.54)
+		boot.y += rear_pivot * 0.075
 		var hip := Vector3(side * 0.164, body.position.y - 0.078, 0)
 		var knee := hip.lerp(boot + Vector3(0, 0.14, 0), 0.49) + Vector3(side * 0.023, 0, 0.09)
 		leg["boot"].position = boot
-		leg["boot"].rotation.y = side * 0.15 + sin(clock * 3.3) * 0.045
+		leg["boot"].rotation.y = side * 0.15 + sin(clock * 3.3) * 0.045 + rear_pivot * 0.48
 		stretch(leg["thigh"], hip, knee, 0.15)
 		stretch(leg["calf"], knee, boot + Vector3(0, 0.14, 0), 0.11)
 
